@@ -46,7 +46,7 @@ try {
         if(record)paths.push(`/${table==='time_entries'?'time':table}/${record.id}`);
         if(table==='invoices'&&record)paths.push(`/invoices/${record.id}/preview`);
       }
-      paths.push('/settings/presets', '/bank', '/bank?view=review', '/bank?view=new', '/bank?view=processed');
+      paths.push('/reports/vat/2026/3', '/settings/presets', '/bank', '/bank?view=review', '/bank?view=new', '/bank?view=processed');
       if((await row("SELECT to_regclass('bank_entries') IS NOT NULL ready")).ready) {
         const entry=await row('SELECT id FROM bank_entries ORDER BY id LIMIT 1');
         if(entry) paths.push(`/bank/${entry.id}`);
