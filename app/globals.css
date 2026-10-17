@@ -274,3 +274,5 @@ p { margin:0; }
 .supplier-rule-setup > summary { cursor:pointer; padding:20px 24px; font-weight:700; }
 .supplier-rule-preview { margin-top:24px; }
 .supplier-rule-preview .bank-check { margin:20px 0; }
+
+.supplier-rule-item + .supplier-rule-item { margin-top:24px; padding-top:24px; border-top:1px solid var(--line); }

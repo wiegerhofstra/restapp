@@ -2,11 +2,11 @@ import { labelNl } from '../dutch.ts';
 import { createHash } from 'node:crypto';
 import { db, row, rows } from '../db.ts';
 import { calculateVat, period, validateLines, type VatLine } from './calculation.ts';
-import { classifySupplier, type SupplierRule, type RuleContext, type Posting } from './supplier-rules.ts';
+import { classifySupplier, outsideVatReturn, supplierTreatmentLabel, type SupplierRule, type RuleContext, type Posting } from './supplier-rules.ts';
 
 export type Source = {kind:'transaction'|'invoice'; id:number; date:string; description:string; reference:string; lines:Record<string,unknown>[]; hash:string; balance:number; status?:string; deleted?:boolean};
 export type Review = {id:number; source_kind:Source['kind']; source_id:number; source_hash:string; source_snapshot:Source; lines:VatLine[]; note:string; actor:string; created_at:string};
-export type Entry = {source:Source; review?:Review; lines:VatLine[]; state:'needs_review'|'reviewed'|'changed'|'deleted'|'rule_applied'; hint:string; supplierRule?:SupplierRule;supplierAssignment?:unknown[]};
+export type Entry = {source:Source; review?:Review; lines:VatLine[]; state:'needs_review'|'reviewed'|'changed'|'deleted'|'rule_applied'; hint:string; supplierRule?:SupplierRule;supplierAssignment?:unknown[];roundingNote?:string};
 export type Snapshot = {id:number; year:number; quarter:number; status:'reviewed'|'submitted'; fingerprint:string; payload:Workspace; receipt:string; actor:string; created_at:string};
 export function hash(value:unknown) {
   // JSONB reorders object keys. Fingerprints must survive a database round trip.
@@ -32,7 +32,7 @@ export async function sources():Promise<Source[]> {
 export async function supplierRules():Promise<SupplierRule[]> {
   if(!(await row<{table:string|null}>("SELECT to_regclass('vat_supplier_rules')::text AS table"))?.table) return [];
   return rows<SupplierRule>(`SELECT r.*,to_jsonb(s) supplier FROM
-    (SELECT DISTINCT ON (supplier_id) * FROM vat_supplier_rules ORDER BY supplier_id,id DESC) r
+    (SELECT DISTINCT ON (supplier_id,rule_key) * FROM vat_supplier_rules ORDER BY supplier_id,rule_key,id DESC) r
     JOIN suppliers s ON s.id=r.supplier_id ORDER BY r.supplier_id`);
 }
 export async function ruleContexts():Promise<Map<number,RuleContext>> {
@@ -41,6 +41,10 @@ export async function ruleContexts():Promise<Map<number,RuleContext>> {
   const contexts=new Map<number,RuleContext>();
   for(const p of postings) {
     const c=contexts.get(p.transactionId)??{postings:[],batch:false};c.postings.push(p);contexts.set(p.transactionId,c);
+  }
+  if((await row<{ready:boolean}>("SELECT to_regclass('bank_accounts') IS NOT NULL ready"))?.ready) {
+    const banks=await rows<{account_id:number}>('SELECT account_id FROM bank_accounts');
+    for(const c of contexts.values()) c.bankAccountIds=c.postings.filter(p=>banks.some(b=>b.account_id===p.accountId)).map(p=>p.accountId);
   }
   const batches=await rows<{transaction_id:number}>(`SELECT transaction_id FROM bank_entries WHERE transaction_id IS NOT NULL
     GROUP BY transaction_id HAVING count(*)>1 OR bool_or(warning<>'' OR jsonb_array_length(details)>1)`);
@@ -96,7 +100,7 @@ async function allEntries():Promise<Entry[]> {
     // checked again. Rules never silently overwrite a person's VAT decision.
     if(!review&&source.kind==='transaction') {
       const result=classifySupplier(source,contexts.get(source.id)??{postings:[],batch:false},rules);
-      if(result.rule&&result.lines) return {source,lines:result.lines,state:'rule_applied',hint:`Automatisch verwerkt volgens de leveranciersregel van ${result.rule.supplier.name}.`,supplierRule:result.rule,...(contexts.get(source.id)?.supplierEvidence?{supplierAssignment:contexts.get(source.id)!.supplierEvidence}:{})};
+      if(result.rule&&result.lines) return {source,lines:result.lines,state:'rule_applied',hint:outsideVatReturn(result.rule.config.code)?`${supplierTreatmentLabel(result.rule.config.code)}, volgens de leveranciersregel van ${result.rule.supplier.name}.`:`Automatisch verwerkt volgens de leveranciersregel van ${result.rule.supplier.name}.${result.notice?' '+result.notice:''}`,supplierRule:result.rule,...(result.notice?{roundingNote:result.notice}:{}),...(contexts.get(source.id)?.supplierEvidence?{supplierAssignment:contexts.get(source.id)!.supplierEvidence}:{})};
       if(result.reason) suggestion.hint=result.reason;
     }
     return {source,review,lines:review?.lines??suggestion.lines,state:review?(review.source_hash===source.hash?'reviewed':'changed'):'needs_review',hint:suggestion.hint};

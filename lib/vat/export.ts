@@ -1,8 +1,14 @@
+import { outsideVatReturn, supplierTreatmentLabel } from './supplier-rules.ts';
 import { labelNl } from '../dutch.ts';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import type { Workspace } from './service';
 import { roundingDescription, rubricLabel } from './calculation.ts';
 import { decimalNl, formatDate } from '../format.ts';
+
+function exclusionLabel(entry:Workspace['entries'][number]) {
+  if(entry.supplierRule&&outsideVatReturn(entry.supplierRule.config.code)) return supplierTreatmentLabel(entry.supplierRule.config.code);
+  return entry.state==='reviewed'?'Niet opgenomen in de btw-aangifte':'Btw-behandeling nog te controleren';
+}
 
 export function csvCell(value:unknown) {
   let text=typeof value==='number'?String(value).replace('.',','):String(value??'');
@@ -19,8 +25,8 @@ export function vatCsv(data:Workspace,label:string) {
   ];
   for(const e of data.entries) {
     const prefix=[labelNl(e.source.kind),e.source.id,e.source.description,e.source.date];
-    const audit=[labelNl(e.state),e.review?.note??'',e.review?.id??'',e.review?.actor??'',e.review?.created_at?new Date(e.review.created_at).toISOString():'',e.supplierRule?.supplier.name??'',e.supplierRule?.id??'',e.supplierRule?.config.note??''];
-    if(!e.lines.length) records.push([...prefix,'',"Uitgesloten / nog niet beoordeeld",'','','',...audit]);
+    const audit=[labelNl(e.state),e.review?.note??'',e.review?.id??'',e.review?.actor??'',e.review?.created_at?new Date(e.review.created_at).toISOString():'',e.supplierRule?.supplier.name??'',e.supplierRule?.id??'',[e.supplierRule?.config.note,e.roundingNote].filter(Boolean).join(' ')];
+    if(!e.lines.length) records.push([...prefix,'',exclusionLabel(e),'','','',...audit]);
     for(const l of e.lines) records.push([...prefix,l.date,l.code,l.base/100,l.tax/100,l.deductibleBps/100,...audit]);
   }
   records.push([],["Openstaande controlepunten"],...data.blockers.map(b=>[b]));
@@ -56,7 +62,8 @@ export async function vatPdf(data:Workspace,label:string) {
     write(`${labelNl(e.source.kind)} #${e.source.id} - ${formatDate(e.source.date)} - ${e.source.description}`,10,true);
     write(`Controle: ${labelNl(e.state)}${e.review?` (#${e.review.id}) - ${e.review.note}`:''}`,9);
     if(e.supplierRule) write(`Leverancier: ${e.supplierRule.supplier.name}, regel #${e.supplierRule.id}. ${e.supplierRule.config.note}`,9);
-    if(!e.lines.length) write("Uitgesloten / geen btw-behandeling vastgelegd",9);
+    if(e.roundingNote) write(e.roundingNote,9);
+    if(!e.lines.length) write(exclusionLabel(e),9);
     for(const l of e.lines) write(`${formatDate(l.date)}: ${l.code}, grondslag EUR ${decimalNl(l.base/100)}, btw EUR ${decimalNl(l.tax/100)}, aftrekbaar ${decimalNl(l.deductibleBps/100,2)}%${l.date<data.start||l.date>data.end?" (buiten dit kwartaal)":''}`,9);
     y-=8;
   }

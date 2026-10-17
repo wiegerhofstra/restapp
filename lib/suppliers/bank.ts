@@ -12,13 +12,30 @@ export async function getBankSupplierLinks() {
   const links=await rows<SupplierLink>('SELECT l.*,s.name supplier_name,s.active supplier_active FROM bank_supplier_links l LEFT JOIN suppliers s ON s.id=l.supplier_id ORDER BY l.entry_id');
   return new Map(links.map(l=>[l.entry_id,l]));
 }
+export type SampleBankLink={entryId:number;version:number;supplierId:number|null;supplierName:string|null;status:string;mode:string|null;eligible:boolean};
+export async function getSampleBankLinks(transactionId:number):Promise<SampleBankLink[]> {
+  if(!await bankSuppliersReady()) return [];
+  return rows<SampleBankLink>(`SELECT e.id "entryId",COALESCE(l.version,0) version,l.supplier_id "supplierId",s.name "supplierName",
+    COALESCE(l.status,'unmatched') status,l.mode,(e.warning='' AND jsonb_array_length(e.details)<=1) eligible
+    FROM bank_entries e LEFT JOIN bank_supplier_links l ON l.entry_id=e.id LEFT JOIN suppliers s ON s.id=l.supplier_id
+    WHERE e.transaction_id=? ORDER BY e.id`,transactionId);
+}
+// Called by VAT rule activation inside its transaction, with both bank/VAT locks.
+// This records the user's explicit supplier choice for the sample payment only.
+export async function linkBankSupplierForVat(entryId:number,version:number,supplierId:number,actor:string) {
+  const old=(await getBankSupplierLinks()).get(entryId);
+  if((old?.version??0)!==version) throw new Error('De leverancierskoppeling is gewijzigd. Bekijk eerst een nieuw voorbeeld.');
+  const supplier=await row<RecognizableSupplier>('SELECT id,name,active FROM suppliers WHERE id=? AND active',supplierId);
+  if(!supplier) throw new Error('Kies een actieve leverancier.');
+  await writeLink(entryId,'manual',{supplier_id:supplierId,status:'matched',evidence:{candidates:[{id:supplierId,name:supplier.name,reasons:['Gekozen bij het vaststellen van de btw-regel']}],ruleIds:[],vatRuleIds:[]}},actor,old);
+}
 async function bankSources(ids?:number[]) {
   return rows<BankSupplierSource>(`SELECT e.id,e.counterparty,e.counterparty_iban,e.description,e.details,e.warning,t.description transaction_description
     FROM bank_entries e LEFT JOIN transactions t ON t.id=e.transaction_id ${ids?'WHERE e.id=ANY(?::bigint[])':''} ORDER BY e.id`,...(ids?[ids]:[]));
 }
 async function identityRules() {
   return rows<{id:number;supplier_id:number;pattern:string}>(`SELECT r.id,r.supplier_id,r.config->>'pattern' pattern FROM
-    (SELECT DISTINCT ON (supplier_id) * FROM vat_supplier_rules ORDER BY supplier_id,id DESC) r
+    (SELECT DISTINCT ON (supplier_id,rule_key) * FROM vat_supplier_rules ORDER BY supplier_id,rule_key,id DESC) r
     JOIN suppliers s ON s.id=r.supplier_id WHERE r.active AND s.active AND (r.config->>'supplierVersion')::integer=s.version`);
 }
 async function writeLink(entryId:number,mode:SupplierLink['mode'],match:Pick<SupplierLink,'supplier_id'|'status'|'evidence'>,actor:string,old?:SupplierLink) {

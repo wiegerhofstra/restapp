@@ -39,6 +39,8 @@ export async function migrateVat(client) {
       actor text NOT NULL, created_at timestamptz NOT NULL DEFAULT now()
     );
     CREATE INDEX IF NOT EXISTS vat_supplier_rules_latest ON vat_supplier_rules(supplier_id,id DESC);
+    ALTER TABLE vat_supplier_rules ADD COLUMN IF NOT EXISTS rule_key text NOT NULL DEFAULT 'default';
+    CREATE INDEX IF NOT EXISTS vat_supplier_rules_versions ON vat_supplier_rules(supplier_id,rule_key,id DESC);
     CREATE TABLE IF NOT EXISTS supplier_bank_rules (
       id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
       supplier_id bigint NOT NULL REFERENCES suppliers(id),

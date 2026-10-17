@@ -97,5 +97,49 @@ try {
   await chooseBankSupplier(third.id,(await link(third.id)).version,null,'New supplier',{field:'iban',pattern:iban},false,'test');
   const newId=(await link(third.id)).supplier_id;assert.ok(newId);assert.equal((await link(second.id)).supplier_id,newId);
   assert.equal((await link(first.id)).status,'excluded');
+  // Choosing a supplier in the VAT form must resolve the sample bank identity
+  // atomically, even when a shared processor IBAN points at another supplier.
+  const samplePayment=await getReviewEntry('transaction',transactionId);
+  const linkingInput={...input,sampleId:transactionId,sampleHash:samplePayment.source.hash,pattern:samplePayment.source.description};
+  const blockedPreview=await previewSupplierRule(linkingInput);
+  assert.match(blockedPreview.blockedReason,/leverancierskoppeling/);
+  const ruleCount=(await row('SELECT count(*) n FROM vat_supplier_rules')).n;
+  await assert.rejects(saveSupplierRule(linkingInput,blockedPreview.token,'test'),/voorbeeldboeking/);
+  assert.equal((await row('SELECT count(*) n FROM vat_supplier_rules')).n,ruleCount);
+  assert.equal((await link(first.id)).status,'excluded');
+  const linking={...linkingInput,linkSampleBank:true};
+  let linkPreview=await previewSupplierRule(linking);
+  assert.equal(linkPreview.blockedReason,undefined);assert.ok(linkPreview.examples.find(e=>e.id===transactionId).automatic);
+  assert.equal(linkPreview.bankLink.entryId,first.id);assert.equal(linkPreview.bankLink.selectedSupplier,'Example Hosting');
+  // Preview has no writes, and cannot authorize a newer bank choice silently.
+  assert.equal((await link(first.id)).status,'excluded');
+  await chooseBankSupplier(first.id,(await link(first.id)).version,supplierB,null,null,false,'test');
+  await assert.rejects(saveSupplierRule(linking,linkPreview.token,'test'),/gewijzigd/);
+  assert.equal((await link(first.id)).supplier_id,supplierB);
+  linkPreview=await previewSupplierRule(linking);
+  assert.equal(linkPreview.bankLink.supplierName,'Other vendor');
+  await saveSupplierRule(linking,linkPreview.token,'test');
+  assert.equal((await link(first.id)).supplier_id,supplierA);assert.equal((await link(first.id)).mode,'manual');
+  assert.equal((await getReviewEntry('transaction',transactionId)).state,'rule_applied');
+  assert.deepEqual((await getReviewEntry('transaction',transactionId)).source,samplePayment.source);
+  await recognizeBankSuppliers('test');assert.equal((await link(first.id)).supplier_id,supplierA);
+  assert.equal((await link(second.id)).supplier_id,newId);
+  // The same operation can create a supplier; VAT and bank identity agree.
+  const createAndLink={...linking,supplierId:null,newSupplier:{name:'New VAT supplier',country:'DE',tax_number:'',active:true}};
+  const newPreview=await previewSupplierRule(createAndLink);assert.equal(newPreview.blockedReason,undefined);
+  const createdSupplier=await saveSupplierRule(createAndLink,newPreview.token,'test');
+  assert.equal((await link(first.id)).supplier_id,createdSupplier);
+  assert.equal((await getReviewEntry('transaction',transactionId)).supplierRule.supplier_id,createdSupplier);
+  // Reject batch sources and roll back every side effect on failed activation.
+  await db.prepare("UPDATE bank_entries SET warning='Batch' WHERE id=?").run(first.id);
+  await assert.rejects(previewSupplierRule(createAndLink),/verzamelbetalingen/);
+  await db.prepare("UPDATE bank_entries SET warning='' WHERE id=?").run(first.id);
+  const beforeLink=await link(first.id),beforeRules=(await row('SELECT count(*) n FROM vat_supplier_rules')).n;
+  const failurePreview=await previewSupplierRule(linking);
+  await admin.query(`CREATE FUNCTION reject_test_rule() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'test atomic failure'; END $$; CREATE TRIGGER reject_test_rule BEFORE INSERT ON vat_supplier_rules FOR EACH ROW EXECUTE FUNCTION reject_test_rule()`);
+  await assert.rejects(saveSupplierRule(linking,failurePreview.token,'test'),/test atomic failure/);
+  assert.deepEqual(await link(first.id),beforeLink);assert.equal((await row('SELECT count(*) n FROM vat_supplier_rules')).n,beforeRules);
+  await admin.query('DROP TRIGGER reject_test_rule ON vat_supplier_rules');
+  console.log('PASS: VAT sample bank identity, explicit override, blocked activation, stale bank choices, new supplier identity, batch rejection and atomic rollback');
   console.log('PASS: automatic import/backfill, ambiguity, remembered rules, manual exclusions, overlap/idempotency, stale/concurrent choices, inactive suppliers, atomic supplier creation and VAT identity propagation');
 } finally {if(pool)await pool.end();await admin.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);await admin.end();}

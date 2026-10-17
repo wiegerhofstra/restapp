@@ -18,9 +18,9 @@ export async function supplierAction(id:number|null,_:SupplierState,data:FormDat
 export async function ruleAction(_:SupplierState,data:FormData):Promise<SupplierState> {
   const user=await actor();let supplierId:number;
   try {
-    const input:RuleInput={sampleId:Number(data.get('sampleId')),sampleHash:value(data,'sampleHash'),supplierId:Number(data.get('supplierId'))||null,
+    const input:RuleInput={ruleKey:value(data,'ruleKey')||'new',ruleName:value(data,'ruleName'),sampleId:Number(data.get('sampleId')),sampleHash:value(data,'sampleHash'),supplierId:Number(data.get('supplierId'))||null,
       newSupplier:{...supplierInput(data),active:true},pattern:value(data,'pattern'),code:value(data,'code'),rateBps:parseAmount(value(data,'rate')),deductibleBps:parseAmount(value(data,'deductible')),
-      validFrom:value(data,'validFrom'),note:value(data,'note')};
+      settlementBankAccountId:Number(data.get('settlementBankAccountId'))||undefined,settlementDirection:value(data,'settlementDirection'),invoiceRoundingCents:data.get('invoiceRounding')==='on'?1:0,linkSampleBank:data.get('linkSampleBank')==='on',validFrom:value(data,'validFrom'),note:value(data,'note')};
     if(data.get('intent')==='preview') return {preview:await previewSupplierRule(input)};
     if(data.get('intent')!=='activate'||data.get('confirmed')!=='on') throw new Error('Bevestig de vaste btw-behandeling, bewijsstukken en btw-datum voor deze reeks.');
     supplierId=await saveSupplierRule(input,value(data,'token'),user);
