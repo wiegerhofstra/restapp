@@ -149,7 +149,7 @@ db.exec(`
     report_id INTEGER NOT NULL REFERENCES reports(id) ON DELETE CASCADE,
     label TEXT NOT NULL,
     account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
-    side TEXT NOT NULL DEFAULT 'debit' CHECK(side IN ('debit', 'credit', 'net')),
+    side TEXT NOT NULL DEFAULT 'debit' CHECK(side IN ('debit', 'credit', 'net', 'net_debit', 'net_credit')),
     legacy_column TEXT CHECK(legacy_column IN ('in', 'out') OR legacy_column IS NULL),
     total_effect INTEGER NOT NULL DEFAULT 1 CHECK(total_effect IN (-1, 0, 1)),
     sort_order INTEGER NOT NULL DEFAULT 0

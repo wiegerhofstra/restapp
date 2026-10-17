@@ -11,12 +11,21 @@
     "migrate:postgres": "node scripts/migrate-to-postgres.mjs",
     "migrate:auth": "node --env-file-if-exists=.env.local scripts/migrate-auth.mjs",
     "test:auth": "node --env-file-if-exists=.env.local scripts/tests/auth.mjs",
-    "test:postgres": "node --env-file=.env.local scripts/tests/postgres.mjs"
+    "test:postgres": "node --env-file=.env.local scripts/tests/postgres.mjs",
+    "migrate:bank": "node --env-file-if-exists=.env.local scripts/migrate-bank.mjs",
+    "test:bank": "node --env-file-if-exists=.env.local scripts/tests/bank.mjs",
+    "migrate:standard-ledger": "node --env-file-if-exists=.env.local scripts/migrate-standard-ledger.mjs",
+    "test:standard-ledger": "node --env-file-if-exists=.env.local scripts/tests/standard-ledger.mjs",
+    "migrate:presets": "node --env-file-if-exists=.env.local scripts/migrate-presets.mjs",
+    "test:presets": "node --env-file-if-exists=.env.local scripts/tests/presets.mjs",
+    "migrate:dates": "node --env-file-if-exists=.env.local scripts/migrate-calendar-dates.mjs",
+    "test:dates": "node --env-file-if-exists=.env.local scripts/tests/calendar-dates.mjs"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
     "better-auth": "^1.7.10",
     "better-sqlite3": "^13.0.3",
+    "fast-xml-parser": "^5.11.2",
     "lucide-react": "^1.40.0",
     "next": "16.3.4",
     "pg": "^8.23.0",

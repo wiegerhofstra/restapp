@@ -1,5 +1,7 @@
+import { calendarDate as dateOnly, calendarDateTypes, addCalendarDays as plusDays } from "./lib/calendar-dates.mjs";
 import pg from "pg";
 import { db } from "../lib/sqlite.ts";
+import { standardAccount, standardLegacyLine, standardReportSide } from "../lib/legacy-ledger.ts";
 
 const { Client } = pg;
 
@@ -32,17 +34,6 @@ function iso(value) {
   return String(value).replace(" ", "T");
 }
 
-function dateOnly(value) {
-  if (!value) return null;
-  return value instanceof Date ? value.toISOString().slice(0, 10) : String(value).slice(0, 10);
-}
-
-function plusDays(value, days) {
-  const date = new Date(`${dateOnly(value)}T12:00:00Z`);
-  date.setUTCDate(date.getUTCDate() + days);
-  return date.toISOString().slice(0, 10);
-}
-
 function scaledInteger(value, decimals) {
   const text = String(value ?? "0").trim();
   const negative = text.startsWith("-");
@@ -57,7 +48,7 @@ function scaledInteger(value, decimals) {
   return Number(negative ? -result : result);
 }
 
-const client = new Client(sourceConfig);
+const client = new Client({ ...sourceConfig, types: calendarDateTypes });
 await client.connect();
 
 try {
@@ -84,6 +75,10 @@ try {
   const root = source.accounts.find((account) => account.name === "root" && Number(account.parent_id) < 0);
   const importedAccounts = source.accounts.filter((account) => account.id !== root?.id);
   const accountById = new Map(source.accounts.map((account) => [account.id, account]));
+  const legacyAccount = (account) => ({ id: account.id, name: account.name,
+    kind: account.account_type === 1 ? "asset" : account.account_type === 2 ? "expense" : "income",
+    parent_id: account.parent_id === root?.id || Number(account.parent_id) < 1 ? null : account.parent_id,
+    inverted: account.inverted ? 1 : 0 });
   if (source.items.some((item) => item.account_id === root?.id)) throw new Error("Root account unexpectedly contains ledger items");
 
   const insert = {
@@ -103,7 +98,7 @@ try {
       VALUES (?,?,?,?,?,?,1,NULL,?,?)`),
     report: db.prepare("INSERT INTO reports (id,name,start_date,end_date,total_label,created_at,updated_at) VALUES (?,?,?,?,?,?,?)"),
     reportRow: db.prepare(`INSERT INTO report_rows (id,report_id,label,account_id,side,legacy_column,total_effect,sort_order)
-      VALUES (?,?,?,?,'debit',?,?,?)`),
+      VALUES (?,?,?,?,?,NULL,?,?)`),
     setting: db.prepare(`INSERT INTO settings (key,value,label,group_name,updated_at) VALUES (?,?,?,'legacy',CURRENT_TIMESTAMP)
       ON CONFLICT(key) DO UPDATE SET value=excluded.value,label=excluded.label,group_name='legacy',updated_at=CURRENT_TIMESTAMP`),
     updateSetting: db.prepare("UPDATE settings SET value=?,updated_at=CURRENT_TIMESTAMP WHERE key=?"),
@@ -114,9 +109,8 @@ try {
     for (const customer of source.customers) insert.customer.run(customer.id, customer.name, customer.reference, customer.street || "", customer.postbus || "", customer.postalcode || "", customer.city || "", customer.country || "", customer.taxnr || "", "", "", iso(customer.created_at), iso(customer.updated_at));
     for (const project of source.projects) insert.project.run(project.id, project.customer_id, project.name, iso(project.created_at), iso(project.updated_at));
     for (const account of importedAccounts) {
-      const kind = account.account_type === 1 ? "asset" : account.account_type === 2 ? "expense" : "income";
-      const parentId = account.parent_id === root?.id || Number(account.parent_id) < 1 ? null : account.parent_id;
-      insert.account.run(account.id, account.name, kind, parentId, account.can_hold_transactions ? 1 : 0, account.inverted ? 1 : 0, account.order ?? account.id, iso(account.created_at), iso(account.updated_at));
+      const converted = standardAccount(legacyAccount(account));
+      insert.account.run(account.id, account.name, converted.kind, converted.parent_id, account.can_hold_transactions ? 1 : 0, converted.inverted, account.order ?? account.id, iso(account.created_at), iso(account.updated_at));
     }
     for (const transaction of source.transactions) insert.transaction.run(transaction.id, dateOnly(transaction.date), transaction.description, transaction.project_id, iso(transaction.created_at), iso(transaction.updated_at));
     for (const item of source.items) {
@@ -124,10 +118,8 @@ try {
       if (!account) throw new Error(`Ledger item ${item.id} references missing account ${item.account_id}`);
       const sourceIn = scaledInteger(item.in, 2);
       const sourceOut = scaledInteger(item.out, 2);
-      const toggle = account.inverted ? -1 : 1;
-      const contribution = sourceIn * toggle * (account.account_type === 3 ? -1 : 1)
-        - sourceOut * toggle * (account.account_type === 1 ? -1 : 1);
-      insert.line.run(item.id, item.stransaction_id, item.account_id, item.description || "", Math.max(contribution, 0), Math.max(-contribution, 0), sourceIn, sourceOut, iso(item.created_at));
+      const converted = standardLegacyLine({id:item.id, transaction_id:item.stransaction_id, account_id:item.account_id, source_in_cents:sourceIn, source_out_cents:sourceOut}, legacyAccount(account));
+      insert.line.run(item.id, item.stransaction_id, item.account_id, item.description || "", converted.debit_cents, converted.credit_cents, sourceIn, sourceOut, iso(item.created_at));
     }
     for (const invoice of source.invoices) {
       const issueDate = dateOnly(invoice.idate);
@@ -148,7 +140,9 @@ try {
       const order = reportOrder.get(reportItem.report_id) || 0;
       reportOrder.set(reportItem.report_id, order + 1);
       const effect = reportItem.include_in_total ? (reportItem.negative ? -1 : 1) : 0;
-      insert.reportRow.run(reportItem.id, reportItem.report_id, reportItem.name, reportItem.account_id, reportItem.in ? "in" : "out", effect, order);
+      const separate = source.reportItems.some(other => other.report_id === reportItem.report_id && other.account_id === reportItem.account_id && other.in !== reportItem.in);
+      const side = standardReportSide(legacyAccount(accountById.get(reportItem.account_id)), reportItem.in ? "in" : "out", separate);
+      insert.reportRow.run(reportItem.id, reportItem.report_id, reportItem.name, reportItem.account_id, side, effect, order);
     }
     for (const setting of source.settings) insert.setting.run(`legacy.${setting.name}`, setting.value || "", `Legacy: ${setting.name}`);
 

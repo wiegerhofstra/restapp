@@ -46,6 +46,13 @@ try {
         if(record)paths.push(`/${table==='time_entries'?'time':table}/${record.id}`);
         if(table==='invoices'&&record)paths.push(`/invoices/${record.id}/preview`);
       }
+      paths.push('/settings/presets', '/bank', '/bank?view=review', '/bank?view=new', '/bank?view=processed');
+      if((await row("SELECT to_regclass('bank_entries') IS NOT NULL ready")).ready) {
+        const entry=await row('SELECT id FROM bank_entries ORDER BY id LIMIT 1');
+        if(entry) paths.push(`/bank/${entry.id}`);
+        const linked=await row('SELECT transaction_id FROM bank_entries WHERE transaction_id IS NOT NULL LIMIT 1');
+        if(linked) paths.push(`/transactions/${linked.transaction_id}`);
+      }
       for(const path of paths) {
         const response=await fetch(process.env.STAPP_TEST_BASE_URL+path,{headers:{Cookie:cookie},redirect:'manual'});
         const body=await response.text();

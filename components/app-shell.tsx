@@ -1,6 +1,6 @@
 "use client";
 
-import { BarChart3, BriefcaseBusiness, Building2, ChevronRight, CircleDollarSign, Clock3, FileText, LayoutDashboard, LogOut, Menu, Plus, ReceiptText, Settings, WalletCards } from "lucide-react";
+import { BarChart3, BriefcaseBusiness, Building2, ChevronRight, CircleDollarSign, Clock3, FileText, LayoutDashboard, LogOut, Menu, Plus, ReceiptText, Settings, WalletCards, Landmark } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
@@ -9,6 +9,7 @@ import { logoutAction } from "@/app/auth-actions";
 const navigation = [
   { href: "/", label: "Overview", icon: LayoutDashboard },
   { href: "/transactions", label: "Transactions", icon: ReceiptText },
+  { href: "/bank", label: "Bank imports", icon: Landmark },
   { href: "/accounts", label: "Accounts", icon: WalletCards },
   { href: "/invoices", label: "Invoices", icon: FileText },
   { href: "/time", label: "Time tracking", icon: Clock3 },
@@ -27,9 +28,9 @@ export function AppShell({ user, children }: { user: { name: string; email: stri
     <aside className={`sidebar ${open ? "open" : ""}`}>
       <div className="brand"><span className="brand-mark"><CircleDollarSign size={21} /></span>stapp</div>
       <div className="nav-label">Workspace</div>
-      <nav className="nav-list" aria-label="Main navigation">{navigation.slice(0, 5).map((item) => <NavItem key={item.href} item={item} pathname={pathname} close={() => setOpen(false)} />)}</nav>
+      <nav className="nav-list" aria-label="Main navigation">{navigation.slice(0, 6).map((item) => <NavItem key={item.href} item={item} pathname={pathname} close={() => setOpen(false)} />)}</nav>
       <div className="nav-label">Business</div>
-      <nav className="nav-list">{navigation.slice(5).map((item) => <NavItem key={item.href} item={item} pathname={pathname} close={() => setOpen(false)} />)}</nav>
+      <nav className="nav-list">{navigation.slice(6).map((item) => <NavItem key={item.href} item={item} pathname={pathname} close={() => setOpen(false)} />)}</nav>
       <div className="sidebar-bottom"><div className="profile"><span className="avatar">{user.name.slice(0, 1).toUpperCase()}</span><div className="profile-copy"><div className="profile-name">{user.name}</div><div className="profile-email">{user.email}</div></div><form action={logoutAction}><button className="icon-button" aria-label="Sign out"><LogOut size={17} /></button></form></div></div>
     </aside>
     <div className="main-wrap">
