@@ -16,7 +16,7 @@ export function matchEntries(entries: MatchEntry[], ledger: LedgerCandidate[]): 
         const reference = common.some(token => token.length >= 6 && /\d/.test(token));
         const merchant = common.some(token => token.length >= 5 && !/^(payment|invoice|betaling|factuur|limited|commerce|kosten)$/.test(token));
         return { ...t, days, strong: !e.warning && t.difference === 0 && (reference && days <= 3 || merchant && days === 0),
-          reasons: ["Same amount and direction", days === 0 ? "Same date" : `${days} day${days === 1 ? "" : "s"} apart`, ...(reference ? ["Shared payment reference"] : merchant ? ["Shared description"] : []), ...(t.difference !== 0 ? ["Existing transaction is unbalanced"] : [])] };
+          reasons: ["Zelfde bedrag en betalingsrichting", days === 0 ? "Zelfde datum" : `${days} ${days === 1 ? "dag" : "dagen"} verschil`, ...(reference ? ["Overeenkomstig betalingskenmerk"] : merchant ? ["Overeenkomstige omschrijving"] : []), ...(t.difference !== 0 ? ["Bestaande boeking is niet in evenwicht"] : [])] };
       }).filter(t => t.days <= 7).sort((a, b) => Number(b.strong) - Number(a.strong) || a.days - b.days || a.id - b.id);
     // No fuzzy score is allowed to conceal a competing amount/date match.
     const suggestedId = candidates.length === 1 && candidates[0].strong ? candidates[0].id : null;

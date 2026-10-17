@@ -215,16 +215,16 @@ if (hasLegacyReferenceConstraint) {
 }
 
 const defaultSettings = [
-  ["company_name", "", "Company name", "company"],
-  ["company_address", "", "Address", "company"],
-  ["company_postal_city", "", "Postal code & city", "company"],
-  ["company_country", "", "Country", "company"],
-  ["company_tax_number", "", "Tax number", "company"],
-  ["company_email", "", "Email", "company"],
-  ["company_phone", "", "Phone", "company"],
+  ["company_name", "", "Bedrijfsnaam", "company"],
+  ["company_address", "", "Adres", "company"],
+  ["company_postal_city", "", "Postcode en plaats", "company"],
+  ["company_country", "", "Land", "company"],
+  ["company_tax_number", "", "Btw-identificatienummer", "company"],
+  ["company_email", "", "E-mailadres", "company"],
+  ["company_phone", "", "Telefoonnummer", "company"],
   ["company_iban", "", "IBAN", "billing"],
-  ["invoice_footer", "Payment is due within 30 days.", "Invoice footer", "billing"],
-  ["currency", "EUR", "Currency", "billing"],
+  ["invoice_footer", "Wij verzoeken u binnen 30 dagen te betalen.", "Factuurvoettekst", "billing"],
+  ["currency", "EUR", "Valuta", "billing"],
 ];
 
 const insertSetting = db.prepare(
@@ -251,7 +251,7 @@ export function moneyFromInput(value: FormDataEntryValue | null) {
 
 export function required(formData: FormData, key: string) {
   const value = String(formData.get(key) ?? "").trim();
-  if (!value) throw new Error(`${key.replaceAll("_", " ")} is required`);
+  if (!value) throw new Error(`${key.replaceAll("_", " ")} is verplicht`);
   return value;
 }
 

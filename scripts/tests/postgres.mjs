@@ -46,7 +46,10 @@ try {
         if(record)paths.push(`/${table==='time_entries'?'time':table}/${record.id}`);
         if(table==='invoices'&&record)paths.push(`/invoices/${record.id}/preview`);
       }
-      paths.push('/reports/vat/2026/3', '/settings/presets', '/bank', '/bank?view=review', '/bank?view=new', '/bank?view=processed');
+      paths.push('/reports/vat/2026/3', '/reports/vat/2026/3?view=all', '/suppliers', '/suppliers/new', '/settings/presets', '/bank', '/bank?view=review', '/bank?view=new', '/bank?view=processed');
+      paths.push('/bank?view=all&supplier=missing', '/bank?view=all&supplier=ambiguous');
+      const supplier=await row('SELECT id FROM suppliers ORDER BY id LIMIT 1');
+      if(supplier) paths.push(`/suppliers/${supplier.id}`, `/bank?view=all&supplier=${supplier.id}`);
       if((await row("SELECT to_regclass('bank_entries') IS NOT NULL ready")).ready) {
         const entry=await row('SELECT id FROM bank_entries ORDER BY id LIMIT 1');
         if(entry) paths.push(`/bank/${entry.id}`);
@@ -57,6 +60,7 @@ try {
         const response=await fetch(process.env.STAPP_TEST_BASE_URL+path,{headers:{Cookie:cookie},redirect:'manual'});
         const body=await response.text();
         assert.equal(response.status,200,`${path} returned ${response.status}`);
+        assert.match(body,/<html[^>]*lang="nl"/,`${path} must declare Dutch as its language`);
         assert(!body.includes('"digest":"')&&!body.includes('NEXT_HTTP_ERROR_FALLBACK;500')&&!body.includes('Application error:'),`${path} contains a runtime error`);
         console.log('PASS route:',path);
       }

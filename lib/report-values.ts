@@ -8,6 +8,6 @@ export function reportValue(row: ReportAmounts) {
   return row.debit - row.credit;
 }
 export function reportSideLabel(row: Pick<ReportAmounts, "side" | "legacy_column">) {
-  if (row.legacy_column) return `Legacy ${row.legacy_column}`;
-  return ({ debit: "Debit", credit: "Credit", net: "Debit − credit", net_debit: "Net debit", net_credit: "Net credit" })[row.side] ?? row.side;
+  if (row.legacy_column) return `Oorspronkelijk ${row.legacy_column === "out" ? "uit" : "in"}`;
+  return ({ debit: "Debet", credit: "Credit", net: "Debet − credit", net_debit: "Debetsaldo", net_credit: "Creditsaldo" })[row.side] ?? row.side;
 }

@@ -72,7 +72,7 @@ try {
   assert(attempts.find(r => r.status === 429).headers.has('x-retry-after'));
   console.log('PASS: concurrent login throttling backed by PostgreSQL');
 
-  await assert.rejects(createAdministrator(pool, 'Second', 'second@example.test', password), /already complete/);
+  await assert.rejects(createAdministrator(pool, 'Second', 'second@example.test', password), /al voltooid/);
   await pool.query('DELETE FROM auth_user');
   const setups = await Promise.allSettled([
     createAdministrator(pool, 'First', email, password),

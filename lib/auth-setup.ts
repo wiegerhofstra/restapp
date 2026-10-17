@@ -6,9 +6,9 @@ import type { Pool } from "pg";
 export async function createAdministrator(pool: Pool, name: string, email: string, password: string) {
   name = name.trim();
   email = email.trim().toLowerCase();
-  if (!name) throw new Error("Your name is required");
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error("Enter a valid email address");
-  if (password.length < 8 || password.length > 128) throw new Error("Password must be between 8 and 128 characters");
+  if (!name) throw new Error("Vul uw naam in");
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error("Vul een geldig e-mailadres in");
+  if (password.length < 8 || password.length > 128) throw new Error("Het wachtwoord moet 8 tot 128 tekens bevatten");
 
   const client = await pool.connect();
   try {
@@ -16,7 +16,7 @@ export async function createAdministrator(pool: Pool, name: string, email: strin
     // Serialize competing setup requests, including across app instances.
     await client.query("LOCK TABLE auth_user IN EXCLUSIVE MODE");
     if ((await client.query("SELECT 1 FROM auth_user LIMIT 1")).rowCount) {
-      throw new Error("Setup is already complete");
+      throw new Error("De inrichting is al voltooid");
     }
     const id = randomUUID();
     const passwordHash = await hashPassword(password);

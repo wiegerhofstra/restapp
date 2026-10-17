@@ -14,12 +14,12 @@ const headingFont = Manrope({
 
 export const metadata: Metadata = {
   title: { default: "Stapp", template: "%s · Stapp" },
-  description: "Calm, clear business administration.",
+  description: "Overzichtelijke bedrijfsadministratie.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${bodyFont.variable} ${headingFont.variable}`}>
+    <html lang="nl" className={`${bodyFont.variable} ${headingFont.variable}`}>
       <body>{children}</body>
     </html>
   );

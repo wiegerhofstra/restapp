@@ -135,8 +135,8 @@ export default async function InvoicePreviewPage({ params }: { params: Promise<{
               return (
                 <tr key={line.id}>
                   <td>{line.description}</td>
-                  <td className="numeric">{line.quantity_milli / 1000}</td>
-                  <td className="numeric">{line.tax_rate_basis_points / 100}%</td>
+                  <td className="numeric">{(line.quantity_milli / 1000).toLocaleString('nl-NL')}</td>
+                  <td className="numeric">{(line.tax_rate_basis_points / 100).toLocaleString('nl-NL')}%</td>
                   <td className="numeric">{formatInvoiceMoney(line.unit_price_cents, currency)}</td>
                   <td className="numeric">{formatInvoiceMoney(total, currency)}</td>
                 </tr>

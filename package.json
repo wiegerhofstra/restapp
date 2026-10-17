@@ -21,7 +21,9 @@
     "migrate:dates": "node --env-file-if-exists=.env.local scripts/migrate-calendar-dates.mjs",
     "test:dates": "node --env-file-if-exists=.env.local scripts/tests/calendar-dates.mjs",
     "migrate:vat": "node --env-file-if-exists=.env.local scripts/migrate-vat.mjs",
-    "test:vat": "node --env-file-if-exists=.env.local scripts/tests/vat.mjs"
+    "test:vat": "node --env-file-if-exists=.env.local scripts/tests/vat.mjs",
+    "test:supplier-rules": "node --env-file-if-exists=.env.local scripts/tests/supplier-rules.mjs",
+    "test:bank-suppliers": "node --env-file-if-exists=.env.local scripts/tests/bank-suppliers.mjs"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

@@ -1,3 +1,4 @@
+import { labelNl } from './dutch.ts';
 import { AsyncLocalStorage } from "node:async_hooks";
 import pg from "pg";
 import type { PoolClient } from "pg";
@@ -82,7 +83,7 @@ export function moneyFromInput(value: FormDataEntryValue | null) {
 
 export function required(formData: FormData, key: string) {
   const value = String(formData.get(key) ?? "").trim();
-  if (!value) throw new Error(`${key.replaceAll("_", " ")} is required`);
+  if (!value) throw new Error(`${labelNl(key)} is verplicht`);
   return value;
 }
 

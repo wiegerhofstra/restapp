@@ -9,22 +9,22 @@ export type PresetSelection = { id: number; version: number };
 export type PresetRule = { id: number; preset_id: number; field: 'iban' | 'name' | 'description'; pattern: string; direction: 'payment' | 'refund' | 'both' };
 export function parseAmount(value: string) {
   const normalized = value.trim().replace(',', '.');
-  if (normalized.length > 24 || !/^-?\d+(\.\d{1,2})?$/.test(normalized)) throw new PresetError('Enter an amount with at most two decimal places.');
+  if (normalized.length > 24 || !/^-?\d+(\.\d{1,2})?$/.test(normalized)) throw new PresetError("Vul een bedrag met maximaal twee decimalen in.");
   const negative = normalized.startsWith('-');
   const [whole, fraction = ''] = normalized.replace('-', '').split('.');
   const result = BigInt(whole) * BigInt(100) + BigInt(fraction.padEnd(2, '0'));
-  if (result > BigInt(Number.MAX_SAFE_INTEGER)) throw new PresetError('Amount is too large.');
+  if (result > BigInt(Number.MAX_SAFE_INTEGER)) throw new PresetError("Het bedrag is te groot.");
   return Number(result) * (negative ? -1 : 1);
 }
 function roundedRatio(amount: number, numerator: number, denominator: number) {
   const result = (BigInt(amount) * BigInt(numerator) + BigInt(Math.floor(denominator / 2))) / BigInt(denominator);
-  if (result > BigInt(Number.MAX_SAFE_INTEGER)) throw new PresetError('Amount is too large.');
+  if (result > BigInt(Number.MAX_SAFE_INTEGER)) throw new PresetError("Het bedrag is te groot.");
   return Number(result);
 }
 export function calculatePreset(preset: Preset, amount: number, basis: 'total' | 'net' = 'total') {
-  if (!Number.isSafeInteger(amount) || amount <= 0) throw new PresetError('Enter a positive amount.');
-  if (!['total', 'net'].includes(basis) || !['none', 'standard', 'reverse'].includes(preset.vat_mode)) throw new PresetError('Invalid preset calculation.');
-  if (!Number.isInteger(preset.rate_bps) || preset.rate_bps < 0 || preset.rate_bps > 10000) throw new PresetError('Invalid VAT rate.');
+  if (!Number.isSafeInteger(amount) || amount <= 0) throw new PresetError("Vul een positief bedrag in.");
+  if (!['total', 'net'].includes(basis) || !['none', 'standard', 'reverse'].includes(preset.vat_mode)) throw new PresetError("Ongeldige sjabloonberekening.");
+  if (!Number.isInteger(preset.rate_bps) || preset.rate_bps < 0 || preset.rate_bps > 10000) throw new PresetError("Ongeldig btw-tarief.");
   let net = amount, tax = 0, total = amount;
   if (preset.vat_mode === 'standard' && basis === 'total') {
     net = roundedRatio(amount, 10000, 10000 + preset.rate_bps);
@@ -33,12 +33,12 @@ export function calculatePreset(preset: Preset, amount: number, basis: 'total' |
     tax = roundedRatio(net, preset.rate_bps, 10000);
     if (preset.vat_mode === 'standard') total = net + tax;
   }
-  if (!Number.isSafeInteger(total)) throw new PresetError('Amount is too large.');
-  const allocations: Allocation[] = [{ accountId: preset.expense_account_id, amountCents: net, memo: 'Net cost' }];
-  if (preset.vat_mode !== 'none' && !preset.input_vat_account_id) throw new PresetError('Choose an input VAT account.');
-  if (preset.vat_mode === 'reverse' && !preset.output_vat_account_id) throw new PresetError('Choose an output VAT account.');
-  if (tax) allocations.push({ accountId: preset.input_vat_account_id!, amountCents: tax, memo: `${preset.rate_bps / 100}% ${preset.vat_mode === 'reverse' ? 'reverse-charge input' : 'input'} VAT` });
-  if (tax && preset.vat_mode === 'reverse') allocations.push({ accountId: preset.output_vat_account_id!, amountCents: -tax, memo: `${preset.rate_bps / 100}% reverse-charge output VAT` });
+  if (!Number.isSafeInteger(total)) throw new PresetError("Het bedrag is te groot.");
+  const allocations: Allocation[] = [{ accountId: preset.expense_account_id, amountCents: net, memo: "Kosten exclusief btw" }];
+  if (preset.vat_mode !== 'none' && !preset.input_vat_account_id) throw new PresetError("Kies een rekening voor de voorbelasting.");
+  if (preset.vat_mode === 'reverse' && !preset.output_vat_account_id) throw new PresetError("Kies een rekening voor de verschuldigde btw.");
+  if (tax) allocations.push({ accountId: preset.input_vat_account_id!, amountCents: tax, memo: `${preset.rate_bps / 100}% ${preset.vat_mode === 'reverse' ? "voorbelasting bij verlegging" : 'voorbelasting'}` });
+  if (tax && preset.vat_mode === 'reverse') allocations.push({ accountId: preset.output_vat_account_id!, amountCents: -tax, memo: `${preset.rate_bps / 100}% verschuldigde btw bij verlegging` });
   return { total, allocations: allocations.filter(a => a.amountCents !== 0) };
 }
 export function suggestPresets(presets: Preset[], rules: PresetRule[], entry: { counterparty: string; counterparty_iban: string; description: string; amount_cents: number; details: unknown[]; warning: string }) {

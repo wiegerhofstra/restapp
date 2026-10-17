@@ -16,26 +16,26 @@ export function LoginForm() {
       });
       if (error) {
         return error.status === 429
-          ? "Too many sign-in attempts. Please wait a minute and try again."
-          : "Email or password is incorrect";
+          ? "Te veel inlogpogingen. Wacht een minuut en probeer het opnieuw."
+          : "E-mailadres of wachtwoord is onjuist";
       }
       router.replace("/");
       router.refresh();
       return "";
     } catch {
-      return "Unable to sign in. Please try again.";
+      return "Inloggen is niet gelukt. Probeer het opnieuw.";
     }
   }, "");
 
   return <form action={submit} className="auth-form">
     <Link href="/" className="brand"><span className="brand-mark"><CircleDollarSign size={21} /></span>stapp</Link>
-    <div className="eyebrow">Welcome back</div><h1>Sign in to Stapp</h1>
-    <p>Use the administrator account created during setup.</p>
+    <div className="eyebrow">Welkom terug</div><h1>Inloggen bij Stapp</h1>
+    <p>Gebruik het beheerdersaccount dat bij de inrichting is aangemaakt.</p>
     {error && <div className="error-message" role="alert">{error}</div>}
     <div className="grid">
-      <div className="field"><label htmlFor="email">Email</label><input id="email" name="email" type="email" autoComplete="email" required autoFocus /></div>
-      <div className="field"><label htmlFor="password">Password</label><input id="password" name="password" type="password" autoComplete="current-password" required /></div>
-      <button className="button primary auth-submit" disabled={pending}>{pending ? "Signing in…" : "Sign in"}</button>
+      <div className="field"><label htmlFor="email">E-mailadres</label><input id="email" name="email" type="email" autoComplete="email" required autoFocus /></div>
+      <div className="field"><label htmlFor="password">Wachtwoord</label><input id="password" name="password" type="password" autoComplete="current-password" required /></div>
+      <button className="button primary auth-submit" disabled={pending}>{pending ? "Inloggen…" : "Inloggen"}</button>
     </div>
   </form>;
 }

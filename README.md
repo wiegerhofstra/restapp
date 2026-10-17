@@ -9,6 +9,7 @@ npm install
 npm run migrate:auth
 npm run migrate:bank
 npm run migrate:presets
+npm run migrate:vat
 npm run dev
 ```
 
@@ -112,3 +113,21 @@ Declaration rounding is favourable after aggregation per field: signed output VA
 The implementation follows the [2026 Belastingdienst return explanation](https://download.belastingdienst.nl/belastingdienst/docs/toelichting_bij_btw_aangifte_ob0731t63fd.pdf) and [invoice-system timing guidance](https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/belastingdienst/zakelijk/btw/btw_aangifte_doen_en_betalen/bereken_het_bedrag/hoe_berekent_u_het_btw_bedrag/factuurstelsel). Invoice dates and supply dates can differ; the reviewer chooses the appropriate date.
 
 `npm run test:vat` exercises calculations, review/submission gates, stale/concurrent changes, immutable snapshots, period moves, unpaid invoices, deletion and export generation in an isolated PostgreSQL schema. Add `STAPP_TEST_BASE_URL=http://localhost:3000` to check anonymous export rejection.
+
+## Leveranciers en automatische btw-verwerking
+
+`npm run migrate:vat` maakt ook de leveranciers- en regelhistorietabellen aan. Open **Leveranciers** voor naam, landcode en btw-identificatienummer. Vanuit een btw-controle kiest u **Deze leverancier voortaan automatisch verwerken**. Selecteer een leverancier of voeg deze direct toe, stel herkenningstekst, rubriek, tarief, aftrekpercentage en ingangsdatum in, en bekijk eerst de passende boekingen. Activeer de regel nadat u de onderbouwing en vaste btw-datum heeft bevestigd.
+
+Regels gelden voor bestaande én toekomstige geboekte leveranciersbetalingen vanaf de ingangsdatum. Herkenning gebruikt de gekoppelde leverancier van de bankmutatie, of anders specifieke tekst in de boekingsomschrijving. De grootboekrekening-ID’s, rekeningsoorten, betalingsrichting en btw-berekening moeten overeenkomen met de voorbeeldboeking. Alleen eenvoudige betalingen met één kostenrekening en afzonderlijke btw-rekeningen worden automatisch verwerkt. Terugbetalingen, verzamelbetalingen, meerdere overeenkomende regels, gewijzigde leveranciersgegevens en afwijkende bedragen/rekeningen blijven ter controle staan. De boekdatum wordt alleen gebruikt als de gebruiker bevestigt dat deze voor de reeks de juiste btw-datum is; afwijkende factuur- of prestatiedatums vragen een individuele controle. Bewijsstukken moeten beschikbaar blijven.
+
+Een automatische verwerking heeft de eigen status **Volgens leveranciersregel** en schrijft geen fictieve handmatige controle. Handmatige beoordelingen gaan altijd voor. De aangifte toont standaard alleen controlepunten; alle boekingen zijn afzonderlijk opvraagbaar. De complete kwartaalaangifte blijft een bewuste bevestiging. Regels zijn te pauzeren en via de voorbeeldboeking opnieuw in te stellen. Iedere regelversie blijft bewaard, en opgeslagen aangifteversies bevatten de gebruikte regel en leveranciersgegevens. CSV en PDF vermelden de regel als onderbouwing.
+
+Boekingssjablonen blijven de rekeningen bij de bankimport invullen; leveranciersregels verwerken de btw na het boeken. Uploads worden nog steeds eerst gecontroleerd voordat nieuwe boekingen ontstaan. `npm run test:supplier-rules` controleert herkenning, uitzonderingen, voorbeeldberekening, gelijktijdige activering, handmatige afwijkingen, pauzeren en onveranderlijke aangiftehistorie in een geïsoleerd databaseschema.
+
+### Leveranciers bij bankmutaties herkennen
+
+Open een bankmutatie en kies of maak een leverancier. Met **Onthoud deze herkenning voor bestaande en volgende bankimports** legt u een regel vast op exact IBAN, exacte naam van de tegenpartij of een specifieke tekst in de omschrijving. De regel geldt direct voor eerdere imports en wordt bij nieuwe CAMT-imports automatisch toegepast. Een exacte leveranciersnaam en herkenningstekst uit een actieve btw-regel kunnen ook een leverancier herkennen. Verzamelbetalingen, bronwaarschuwingen en meerdere passende leveranciers blijven ter controle staan.
+
+Handmatige koppelingen en een bewuste keuze voor geen leverancier blijven behouden. Met **Automatische herkenning herstellen** geeft u een mutatie weer vrij voor herkenning. Het bankoverzicht biedt filters voor ontbrekende en onduidelijke koppelingen; leveranciersdetails tonen de herkenningsregels en gekoppelde mutaties. Regels zijn te pauzeren. Iedere wijziging van een koppeling wordt vastgelegd in een onveranderlijke historie. Leverancierskoppelingen maken geen boekingen; nieuwe transacties blijven wachten op controle. Een gekoppelde leverancier wordt bij de daaropvolgende btw-beoordeling gebruikt, met behoud van alle controles op de boeking en expliciete bevestiging van de kwartaalaangifte.
+
+`npm run migrate:vat` maakt de herkennings- en historietabellen aan. **Leveranciers opnieuw herkennen** verwerkt bestaande bankmutaties. `npm run test:bank-suppliers` controleert herkenning, conflicten, handmatige uitzonderingen, herhaalde imports, gelijktijdige wijzigingen en de doorwerking naar btw-regels in een geïsoleerd databaseschema.

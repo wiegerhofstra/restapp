@@ -23,59 +23,59 @@ function str(value: unknown): string { return typeof value === "string" ? value.
 const text = (value: unknown, ...path: string[]) => str(at(value, ...path));
 function fail(message: string): never { throw new BankImportError(message); }
 export function cents(value: string): number {
-  if (!/^\d+(?:\.\d{1,2})?$/.test(value)) fail(`Invalid EUR amount: ${value.slice(0, 30)}`);
+  if (!/^\d+(?:\.\d{1,2})?$/.test(value)) fail(`Ongeldig eurobedrag: ${value.slice(0, 30)}`);
   const [whole, fraction = ""] = value.split(".");
   const result = Number(whole) * 100 + Number(fraction.padEnd(2, "0"));
-  if (!Number.isSafeInteger(result)) fail("Amount exceeds the supported range.");
+  if (!Number.isSafeInteger(result)) fail("Het bedrag is te groot.");
   return result;
 }
 function signedAmount(node: unknown, direction: string) {
-  if (text(node, "@_Ccy") !== "EUR") fail("Only EUR statements and booking amounts are supported.");
-  if (direction !== "CRDT" && direction !== "DBIT") fail("Missing credit/debit indicator.");
+  if (text(node, "@_Ccy") !== "EUR") fail("Alleen bankafschriften en boekingsbedragen in euro’s worden ondersteund.");
+  if (direction !== "CRDT" && direction !== "DBIT") fail("De aanduiding debet/credit ontbreekt.");
   return cents(str(node)) * (direction === "DBIT" ? -1 : 1);
 }
 function date(value: string): string {
   const day = value.slice(0, 10);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || !Number.isFinite(Date.parse(day)) || new Date(day).toISOString().slice(0, 10) !== day) fail("Invalid or missing statement date.");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || !Number.isFinite(Date.parse(day)) || new Date(day).toISOString().slice(0, 10) !== day) fail("De afschriftdatum ontbreekt of is ongeldig.");
   return day;
 }
 function usableRef(value: string) { return /^(NOTPROVIDED|NONREF|NOTAVAILABLE|N\/A)$/i.test(value) ? "" : value; }
 export const digest = (value: string) => createHash("sha256").update(value).digest("hex");
 
 export function parseCamt(xml: string): ParsedStatement[] {
-  if (Buffer.byteLength(xml) > MAX_XML_BYTES) fail("Choose an XML file smaller than 5 MB.");
-  if (/<!DOCTYPE|<!ENTITY/i.test(xml)) fail("XML document types and custom entities are not allowed.");
+  if (Buffer.byteLength(xml) > MAX_XML_BYTES) fail("Kies een XML-bestand kleiner dan 5 MB.");
+  if (/<!DOCTYPE|<!ENTITY/i.test(xml)) fail("XML-documenttypen en aangepaste entiteiten zijn niet toegestaan.");
   const valid = XMLValidator.validate(xml);
-  if (valid !== true) fail(`Invalid XML at line ${valid.err.line}.`);
+  if (valid !== true) fail(`Ongeldige XML op regel ${valid.err.line}.`);
   const parser = new XMLParser({ ignoreAttributes: false, removeNSPrefix: true, parseTagValue: false, parseAttributeValue: false, trimValues: true });
   const root = parser.parse(xml);
   const documentTag = xml.match(/<((?:[\w.-]+:)?Document)\b[^>]*>/)?.[0] ?? "";
   const prefix = documentTag.match(/^<([\w.-]+):Document/)?.[1];
   const namespace = documentTag.match(new RegExp(`\\bxmlns${prefix ? `:${prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}` : ""}\\s*=\\s*["']([^"']+)["']`))?.[1];
-  if (!/^urn:iso:std:iso:20022:tech:xsd:camt\.053\.001\.(02|03|08)$/.test(namespace ?? "")) fail("Supported formats: CAMT.053.001.02, .03 and .08.");
+  if (!/^urn:iso:std:iso:20022:tech:xsd:camt\.053\.001\.(02|03|08)$/.test(namespace ?? "")) fail("Ondersteunde formaten: CAMT.053.001.02, .03 en .08.");
   const statements = list(at(root, "Document", "BkToCstmrStmt", "Stmt"));
-  if (!statements.length) fail("No CAMT.053 statements found.");
+  if (!statements.length) fail("Geen CAMT.053-bankafschriften gevonden.");
   let entryCount = 0;
   const result = statements.map(s => {
     const iban = text(s, "Acct", "Id", "IBAN").replace(/\s/g, "").toUpperCase();
-    if (!/^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/.test(iban)) fail("The statement needs a valid account IBAN.");
-    if (text(s, "Acct", "Ccy") !== "EUR") fail("Only EUR accounts are supported.");
+    if (!/^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/.test(iban)) fail("Het bankafschrift moet een geldig IBAN bevatten.");
+    if (text(s, "Acct", "Ccy") !== "EUR") fail("Alleen bankrekeningen in euro’s worden ondersteund.");
     const balances = list(s.Bal);
     const balance = (code: string) => balances.find(b => text(b, "Tp", "CdOrPrtry", "Cd") === code);
     const opening = balance("OPBD") ?? balance("PRCD"), closing = balance("CLBD");
-    if (!opening || !closing) fail("Opening and closing booked balances are required to verify this statement.");
+    if (!opening || !closing) fail("Geboekte begin- en eindsaldi zijn nodig om dit afschrift te controleren.");
     const openingCents = signedAmount(opening.Amt, text(opening, "CdtDbtInd"));
     const closingCents = signedAmount(closing.Amt, text(closing, "CdtDbtInd"));
     const entries = list(s.Ntry).map(e => {
-      if (++entryCount > 10000) fail("Import at most 10,000 entries at a time.");
-      if ((text(e, "Sts", "Cd") || text(e, "Sts")) !== "BOOK") fail("Only booked bank entries can be imported.");
+      if (++entryCount > 10000) fail("Importeer maximaal 10.000 bankmutaties tegelijk.");
+      if ((text(e, "Sts", "Cd") || text(e, "Sts")) !== "BOOK") fail("Alleen geboekte bankmutaties kunnen worden geïmporteerd.");
       const direction = text(e, "CdtDbtInd");
       const amountCents = signedAmount(e.Amt, direction);
-      if (!amountCents) fail("Zero-value bank entries are not supported.");
+      if (!amountCents) fail("Bankmutaties met een nulbedrag worden niet ondersteund.");
       const bookingDate = date(text(e, "BookgDt", "Dt") || text(e, "BookgDt", "DtTm"));
       const valueDate = date(text(e, "ValDt", "Dt") || text(e, "ValDt", "DtTm") || bookingDate);
       const bankReference = usableRef(text(e, "NtryRef")), serviceReference = usableRef(text(e, "AcctSvcrRef"));
-      if (!bankReference && !serviceReference) fail("An entry has no stable bank reference; importing it could create duplicates.");
+      if (!bankReference && !serviceReference) fail("Een bankmutatie heeft geen vaste bankreferentie. Importeren kan dubbele boekingen veroorzaken.");
       const entryDetails = list(e.NtryDtls);
       const batchCount = entryDetails.reduce((sum, d) => sum + Number(text(d, "Btch", "NbOfTxs") || "0"), 0);
       const details = entryDetails.flatMap(d => list(d.TxDtls)).map(d => {
@@ -90,11 +90,11 @@ export function parseCamt(xml: string): ParsedStatement[] {
       });
       const detailTotal = details.reduce((sum, d) => sum + (d.amountCents ?? 0), 0);
       const warning = batchCount > details.length && batchCount > 1
-        ? "Batch booking: individual payment details are missing. Review the batch total before linking or posting."
+        ? "Verzamelbetaling: details van de afzonderlijke betalingen ontbreken. Controleer het totaal voordat u koppelt of boekt."
         : details.length > 1
         ? details.every(d => d.amountCents !== null) && detailTotal === amountCents
-          ? "Batch booking: review the individual payments below. Link or post the total once."
-          : "Batch details do not fully explain the booked total. Review the total and any charges before posting."
+          ? "Verzamelbetaling: controleer de afzonderlijke betalingen hieronder. Koppel of boek het totaal één keer."
+          : "De details van de verzamelbetaling sluiten niet aan op het geboekte totaal. Controleer het totaal en eventuele kosten voordat u boekt."
         : "";
       return { key: digest(`${iban}|${bankReference ? `entry:${bankReference}` : `service:${serviceReference}`}`),
         bankReference, serviceReference, bookingDate, valueDate, amountCents,
@@ -104,12 +104,12 @@ export function parseCamt(xml: string): ParsedStatement[] {
         description: details.map(d => d.description).filter(Boolean).join(" · ") || text(e, "AddtlNtryInf"), details, warning };
     });
     const movement = entries.reduce((sum, e) => sum + e.amountCents, 0);
-    if (!Number.isSafeInteger(movement) || openingCents + movement !== closingCents) fail("Statement balances do not reconcile. No entries were imported.");
-    if (new Set(entries.map(e => e.key)).size !== entries.length) fail("The statement repeats a bank entry reference.");
+    if (!Number.isSafeInteger(movement) || openingCents + movement !== closingCents) fail("De afschriftsaldi sluiten niet aan. Er zijn geen bankmutaties geïmporteerd.");
+    if (new Set(entries.map(e => e.key)).size !== entries.length) fail("Het afschrift bevat een dubbele bankreferentie.");
     return { statementId: text(s, "Id"), iban, currency: "EUR", openingCents, closingCents,
       startDate: date(text(s, "FrToDt", "FrDtTm") || text(opening, "Dt", "Dt") || text(opening, "Dt", "DtTm")),
       endDate: date(text(s, "FrToDt", "ToDtTm") || text(closing, "Dt", "Dt") || text(closing, "Dt", "DtTm")), entries };
   });
-  if (new Set(result.map(s => s.iban)).size !== 1) fail("Upload a statement for one bank account at a time.");
+  if (new Set(result.map(s => s.iban)).size !== 1) fail("Upload afschriften voor één bankrekening tegelijk.");
   return result;
 }

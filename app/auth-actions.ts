@@ -11,7 +11,7 @@ export async function setupAction(formData: FormData) {
     const password = String(formData.get("password") ?? "");
     await createFirstUser(name, email, password);
   } catch (error) {
-    redirect(`/setup?error=${encodeURIComponent(error instanceof Error ? error.message : "Setup failed")}`);
+    redirect(`/setup?error=${encodeURIComponent(error instanceof Error ? error.message : "Inrichting mislukt")}`);
   }
   redirect("/");
 }

@@ -41,13 +41,15 @@ assert.equal(calculateVat([line('4b',1990,418,5000)]).balanceEuros,1);
 assert.equal(calculateVat([line('4b',-1990,-418,5000)]).balanceEuros,-3);
 assert.equal(calculateVat([line('3b',25099,0)]).totals.find(r=>r.code==='3b').baseEuros,250);
 assert.equal(calculateVat([line('3b',-25099,0)]).totals.find(r=>r.code==='3b').baseEuros,-251);
-assert.match(roundingDescription(q3.rounding),/Favourable/);
-assert.match(roundingDescription(),/nearest/);
+assert.match(roundingDescription(q3.rounding),/uw voordeel/);
+assert.match(roundingDescription(),/dichtstbijzijnde/);
 for(const invalid of [line('5a',1,1),line('4b',1,-1),line('3b',100,1),line('1a',100,21,10000),line('5b',100,21,10001),line('5b',100.1,21,10000)]) assert.throws(()=>validateLines([invalid]));
 assert.equal(validDate('2026-02-30'),false);assert.equal(validDate('2024-02-29'),true);
 assert.equal(validDate('2026-99-99'),false);
 assert.equal(period(2026,1).end,'2026-03-31');assert.throws(()=>period(2026,5));
 assert.equal(csvCell('=HYPERLINK("evil")'),'"\'=HYPERLINK(""evil"")"');assert.equal(csvCell(-84),'"-84"');
+assert.equal(csvCell(127.33),'"127,33"');
+assert.equal(csvCell(-84.43),'"-84,43"');
 console.log('PASS: VAT rubrics, reverse charge, partial deductions, credit notes, signed rounding, quarter dates and CSV escaping');
 
 const schema='vat_test_'+randomBytes(8).toString('hex');
@@ -70,14 +72,14 @@ try {
   const {getPool,db,row}=await import('../../lib/db.ts');pool=getPool();
   const {getWorkspace,getReviewEntry,saveReview,saveSnapshot,hash}=await import('../../lib/vat/service.ts');
   let {current}=await getWorkspace(2026,3);assert.equal(current.blockers.length,1);
-  await assert.rejects(saveSnapshot(2026,3,current.fingerprint,'reviewed','','test'),/Resolve/);
+  await assert.rejects(saveSnapshot(2026,3,current.fingerprint,'reviewed','','test'),/Werk eerst/);
   let e=await getReviewEntry('transaction',1);assert.deepEqual(e.lines,[line('4b',1990,418,10000)]);
-  await assert.rejects(saveReview('transaction',1,'stale',0,e.lines,'invoice','test'),/changed/);
-  await assert.rejects(saveReview('transaction',1,e.source.hash,0,e.lines,'','test'),/reference/);
+  await assert.rejects(saveReview('transaction',1,'stale',0,e.lines,'invoice','test'),/gewijzigd/);
+  await assert.rejects(saveReview('transaction',1,e.source.hash,0,e.lines,'','test'),/kenmerk/);
   const attempts=await Promise.allSettled([1,2].map(()=>saveReview('transaction',1,e.source.hash,0,e.lines,'Invoice nc-123, checked EU supply date','test')));
   assert.equal(attempts.filter(r=>r.status==='fulfilled').length,1);
   ({current}=await getWorkspace(2026,3));assert.equal(current.blockers.length,0);
-  await assert.rejects(saveSnapshot(2026,3,current.fingerprint,'submitted','receipt','test'),/reviewed copy/);
+  await assert.rejects(saveSnapshot(2026,3,current.fingerprint,'submitted','receipt','test'),/gecontroleerde versie/);
   // A pre-change reviewed copy must keep its figures and require a fresh review.
   const legacy=JSON.parse(JSON.stringify(current));delete legacy.rounding;
   const nearest=n=>Math.sign(n)*Math.round(Math.abs(n)/100);
@@ -88,17 +90,17 @@ try {
   legacy.fingerprint=hash({version:1,p:{year,quarter,start,end},entries,pending,result:{totals,balanceCents,balanceEuros}});
   const oldId=(await db.prepare("INSERT INTO vat_snapshots(year,quarter,status,fingerprint,payload,actor) VALUES(2026,3,'reviewed',?,?,'test')").run(legacy.fingerprint,JSON.stringify(legacy))).lastInsertRowid;
   assert.notEqual(current.fingerprint,legacy.fingerprint);
-  await assert.rejects(saveSnapshot(2026,3,current.fingerprint,'submitted','receipt','test'),/reviewed copy/);
-  assert.match(vatCsv(legacy,'REVIEWED'),/nearest euro/);
+  await assert.rejects(saveSnapshot(2026,3,current.fingerprint,'submitted','receipt','test'),/gecontroleerde versie/);
+  assert.match(vatCsv(legacy,'REVIEWED'),/dichtstbijzijnde hele euro/);
   assert.equal(legacy.balanceEuros,0);assert.equal(current.balanceEuros,-1);
   const reviewedId=await saveSnapshot(2026,3,current.fingerprint,'reviewed','','test');
-  await assert.rejects(saveSnapshot(2026,3,current.fingerprint,'submitted','','test'),/receipt/);
+  await assert.rejects(saveSnapshot(2026,3,current.fingerprint,'submitted','','test'),/ontvangstbevestiging/);
   const submittedId=await saveSnapshot(2026,3,current.fingerprint,'submitted','receipt-123','test');
   const frozen=(await row('SELECT payload FROM vat_snapshots WHERE id=?',submittedId)).payload;
   assert.deepEqual(frozen.entries[0].lines,e.lines);
   assert.equal(frozen.rounding,'favourable-v1');
   assert.deepEqual((await row('SELECT payload FROM vat_snapshots WHERE id=?',oldId)).payload,legacy);
-  assert.match(vatCsv(frozen,'SUBMITTED'),/Favourable rounding/);
+  assert.match(vatCsv(frozen,'SUBMITTED'),/Afronding in uw voordeel/);
   assert.equal((await row('SELECT previous_id FROM vat_snapshots WHERE id=?',submittedId)).previous_id,reviewedId);
   await assert.rejects(db.prepare("UPDATE vat_reviews SET note='tampered'").run(),/append-only/);
   await assert.rejects(db.prepare('DELETE FROM vat_snapshots').run(),/append-only/);
@@ -106,7 +108,7 @@ try {
   await db.prepare("UPDATE transactions SET description='Changed description' WHERE id=1").run();
   ({current}=await getWorkspace(2026,3));assert.notEqual(current.fingerprint,originalFingerprint);assert.equal(current.entries[0].state,'changed');
   assert.deepEqual((await row('SELECT payload FROM vat_snapshots WHERE id=?',submittedId)).payload,frozen);
-  await assert.rejects(saveSnapshot(2026,3,originalFingerprint,'reviewed','','test'),/changed/);
+  await assert.rejects(saveSnapshot(2026,3,originalFingerprint,'reviewed','','test'),/gewijzigd/);
   e=await getReviewEntry('transaction',1);
   await saveReview('transaction',1,e.source.hash,e.review.id,[line('4b',1990,418,10000,'2026-06-30')],'Supply date June 30','test');
   assert.equal((await getWorkspace(2026,3)).current.balanceCents,0);
@@ -123,13 +125,13 @@ try {
   await db.prepare('DELETE FROM transactions WHERE id=1').run();
   assert.equal((await getWorkspace(2026,2)).current.entries[0].state,'deleted');
   e=await getReviewEntry('transaction',1);
-  await assert.rejects(saveReview('transaction',1,e.source.hash,e.review.id,e.lines,'deleted','test'),/removing/);
+  await assert.rejects(saveReview('transaction',1,e.source.hash,e.review.id,e.lines,'deleted','test'),/verwijderen/);
   await saveReview('transaction',1,e.source.hash,e.review.id,[],'Original duplicate source was deleted','test');
   assert.equal((await getReviewEntry('transaction',1)).state,'reviewed');
   assert.equal((await getWorkspace(2026,2)).current.entries.length,0);
-  const csv=vatCsv(frozen,'SUBMITTED');assert.match(csv,/418|4\.18/);assert.match(csv,/Invoice nc-123/);
+  const csv=vatCsv(frozen,'SUBMITTED');assert.match(csv,/4,18/);assert.match(csv,/"Rubriek";"Omschrijving"/);assert.ok(csv.startsWith('\uFEFF'));assert.match(csv,/"Boeking"/);assert.match(csv,/Invoice nc-123/);
   const pdf=await PDFDocument.load(await vatPdf(frozen,'SUBMITTED'));
-  assert.ok(pdf.getPageCount()>0);assert.match(pdf.getTitle(),/2026 Q3/);
+  assert.ok(pdf.getPageCount()>0);assert.match(pdf.getTitle(),/2026 kwartaal 3/);
   console.log('PASS: repeatable migration, review gating, concurrent/stale reviews, immutable submission evidence, quarter moves, unpaid invoices, pending bank entries, deleted sources, CSV and real PDF output');
 } finally {if(pool)await pool.end();await admin.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);await admin.end();}
 

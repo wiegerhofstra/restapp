@@ -74,7 +74,7 @@ export async function saveProject(projectId: number | null, formData: FormData) 
 export async function saveAccount(accountId: number | null, formData: FormData) {
   await authorized();
   const parentId = nullableId(formData, "parent_id");
-  if (accountId && parentId === accountId) throw new Error("An account cannot be its own parent");
+  if (accountId && parentId === accountId) throw new Error("Een rekening kan niet zijn eigen hoofdrekening zijn");
   const values = [
     required(formData, "name"),
     required(formData, "kind"),
@@ -144,7 +144,7 @@ export async function addTransactionLine(transactionId: number, formData: FormDa
   await authorized();
   const debit = moneyFromInput(formData.get("debit"));
   const credit = moneyFromInput(formData.get("credit"));
-  if ((debit > 0 && credit > 0) || (debit === 0 && credit === 0)) throw new Error("Enter either a debit or a credit amount");
+  if ((debit > 0 && credit > 0) || (debit === 0 && credit === 0)) throw new Error("Vul een debetbedrag of een creditbedrag in");
   (await db.prepare(`INSERT INTO transaction_lines (transaction_id, account_id, memo, debit_cents, credit_cents)
     VALUES (?, ?, ?, ?, ?)`).run(transactionId, numberValue(formData, "account_id"), optional(formData, "memo"), debit, credit));
   revalidatePath(`/transactions/${transactionId}`);
@@ -160,7 +160,7 @@ export async function addTaxSplit(transactionId: number, formData: FormData) {
   await authorized();
   const net = moneyFromInput(formData.get("net_amount"));
   const rate = Number(String(formData.get("tax_rate") ?? "21").replace(",", "."));
-  if (net <= 0 || !Number.isFinite(rate) || rate < 0) throw new Error("Enter a valid net amount and tax rate");
+  if (net <= 0 || !Number.isFinite(rate) || rate < 0) throw new Error("Vul een geldig bedrag exclusief btw en btw-tarief in");
   const tax = Math.round(net * rate / 100);
   const gross = net + tax;
   const bankAccount = numberValue(formData, "bank_account_id");
@@ -171,13 +171,13 @@ export async function addTaxSplit(transactionId: number, formData: FormData) {
     VALUES (?, ?, ?, ?, ?)`);
   (await db.transaction(async () => {
     if (direction === "purchase") {
-      (await insert.run(transactionId, categoryAccount, "Net amount", net, 0));
-      if (tax) (await insert.run(transactionId, taxAccount, `${rate}% VAT`, tax, 0));
-      (await insert.run(transactionId, bankAccount, "Gross payment", 0, gross));
+      (await insert.run(transactionId, categoryAccount, "Bedrag exclusief btw", net, 0));
+      if (tax) (await insert.run(transactionId, taxAccount, `${rate}% btw`, tax, 0));
+      (await insert.run(transactionId, bankAccount, "Betaling inclusief btw", 0, gross));
     } else {
-      (await insert.run(transactionId, bankAccount, "Gross receipt", gross, 0));
-      (await insert.run(transactionId, categoryAccount, "Net amount", 0, net));
-      if (tax) (await insert.run(transactionId, taxAccount, `${rate}% VAT`, 0, tax));
+      (await insert.run(transactionId, bankAccount, "Ontvangst inclusief btw", gross, 0));
+      (await insert.run(transactionId, categoryAccount, "Bedrag exclusief btw", 0, net));
+      if (tax) (await insert.run(transactionId, taxAccount, `${rate}% btw`, 0, tax));
     }
   })());
   revalidatePath(`/transactions/${transactionId}`);
@@ -299,7 +299,7 @@ export async function createReport(formData: FormData) {
     required(formData, "name"),
     required(formData, "start_date"),
     required(formData, "end_date"),
-    optional(formData, "total_label") || "Total",
+    optional(formData, "total_label") || "Totaal",
   ));
   revalidatePath("/reports");
   redirect(`/reports/${result.lastInsertRowid}`);
@@ -308,7 +308,7 @@ export async function createReport(formData: FormData) {
 export async function updateReport(id: number, formData: FormData) {
   await authorized();
   (await db.prepare("UPDATE reports SET name=?, start_date=?, end_date=?, total_label=?, updated_at=CURRENT_TIMESTAMP::text WHERE id=?").run(
-    required(formData, "name"), required(formData, "start_date"), required(formData, "end_date"), optional(formData, "total_label") || "Total", id,
+    required(formData, "name"), required(formData, "start_date"), required(formData, "end_date"), optional(formData, "total_label") || "Totaal", id,
   ));
   revalidatePath(`/reports/${id}`);
   revalidatePath("/reports");
@@ -318,7 +318,7 @@ export async function duplicateReport(id: number) {
   await authorized();
   const report = (await db.prepare("SELECT * FROM reports WHERE id=?").get(id)) as Record<string, unknown>;
   const result = (await db.prepare("INSERT INTO reports (name, start_date, end_date, total_label) VALUES (?, ?, ?, ?)").run(
-    `Copy of ${report.name}`, report.start_date, report.end_date, report.total_label,
+    `Kopie van ${report.name}`, report.start_date, report.end_date, report.total_label,
   ));
   (await db.prepare(`INSERT INTO report_rows (report_id, label, account_id, side, legacy_column, total_effect, sort_order)
     SELECT ?, label, account_id, side, legacy_column, total_effect, sort_order FROM report_rows WHERE report_id=?`).run(result.lastInsertRowid, id));

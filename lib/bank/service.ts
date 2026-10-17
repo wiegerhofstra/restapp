@@ -1,3 +1,4 @@
+import { refreshBankSupplierLinks } from '../suppliers/bank.ts';
 import { loadSelectedPreset, recordPreset } from "../presets/service.ts";
 import type { PresetSelection } from "../presets/calculation.ts";
 import { db, row, rows } from "../db.ts";
@@ -14,7 +15,7 @@ export type BankEntry = {
 };
 export type Allocation = { accountId: number; amountCents: number; memo: string };
 function fail(message: string): never { throw new BankImportError(message); }
-const lock = () => row("SELECT pg_advisory_xact_lock(713053)");
+const lock = async () => { await row("SELECT pg_advisory_xact_lock(713055)"); await row("SELECT pg_advisory_xact_lock(713053)"); };
 export async function schemaReady() {
   return Boolean((await row<{ ready: boolean }>("SELECT to_regclass('bank_entries') IS NOT NULL AS ready"))?.ready);
 }
@@ -26,16 +27,17 @@ export async function importStatement(xml: string, filename: string, accountId: 
     await lock();
     const existing = await row<{ id: number; account_id: number }>(`SELECT i.id,a.account_id FROM bank_imports i JOIN bank_accounts a ON a.id=i.bank_account_id WHERE i.file_hash=?`, hash);
     if (existing) {
-      if (existing.account_id !== accountId) fail("This statement is already assigned to a different ledger account.");
+      if (existing.account_id !== accountId) fail("Dit afschrift is al toegewezen aan een andere grootboekrekening.");
+      await refreshBankSupplierLinks(actor);
       return { id: existing.id, duplicate: true, added: 0 };
     }
     const account = await row<{ id: number }>("SELECT id FROM accounts WHERE id=? AND can_post=1 AND kind='asset'", accountId);
-    if (!account) fail("Choose a posting asset account for the bank account.");
+    if (!account) fail("Kies een boekbare activarekening voor de bankrekening.");
     const iban = statements[0].iban;
     let bank = await row<{ id: number; account_id: number }>("SELECT id,account_id FROM bank_accounts WHERE iban=?", iban);
-    if (bank && bank.account_id !== accountId) fail("This IBAN is already mapped to another ledger account.");
+    if (bank && bank.account_id !== accountId) fail("Dit IBAN is al gekoppeld aan een andere grootboekrekening.");
     if (!bank) {
-      if (await row("SELECT id FROM bank_accounts WHERE account_id=?", accountId)) fail("That ledger account is already used for another IBAN.");
+      if (await row("SELECT id FROM bank_accounts WHERE account_id=?", accountId)) fail("Deze grootboekrekening wordt al gebruikt voor een ander IBAN.");
       const inserted = await db.prepare("INSERT INTO bank_accounts (iban,account_id) VALUES (?,?)").run(iban, accountId);
       bank = { id: inserted.lastInsertRowid!, account_id: accountId };
     }
@@ -45,7 +47,7 @@ export async function importStatement(xml: string, filename: string, accountId: 
     let added = 0;
     for (const s of statements) for (const e of s.entries) {
       let stored = await row<{ id: number; amount_cents: number; booking_date: string }>("SELECT id,amount_cents,booking_date FROM bank_entries WHERE entry_key=?", e.key);
-      if (stored && (stored.amount_cents !== e.amountCents || stored.booking_date !== e.bookingDate)) fail("A previously imported bank reference has a different date or amount. Review the source statements.");
+      if (stored && (stored.amount_cents !== e.amountCents || stored.booking_date !== e.bookingDate)) fail("Een eerder geïmporteerde bankreferentie heeft een andere datum of een ander bedrag. Controleer de bronafschriften.");
       if (!stored) {
         const created = await db.prepare(`INSERT INTO bank_entries (bank_account_id,entry_key,bank_reference,service_reference,booking_date,value_date,amount_cents,counterparty,counterparty_iban,reference,description,details,warning)
           VALUES (?,?,?,?,?,?,?,?,?,?,?,?::jsonb,?)`).run(bank.id, e.key, e.bankReference, e.serviceReference, e.bookingDate, e.valueDate, e.amountCents, e.name, e.iban, e.reference, e.description, JSON.stringify(e.details), e.warning);
@@ -55,6 +57,7 @@ export async function importStatement(xml: string, filename: string, accountId: 
       await db.prepare("INSERT INTO bank_import_entries (import_id,entry_id) VALUES (?,?) ON CONFLICT DO NOTHING").all(imported.lastInsertRowid, stored.id);
     }
     await db.prepare("UPDATE bank_imports SET new_count=? WHERE id=?").run(added, imported.lastInsertRowid);
+    await refreshBankSupplierLinks(actor);
     return { id: imported.lastInsertRowid!, duplicate: false, added };
   })();
 }
@@ -89,8 +92,8 @@ export async function getMatches(entries: BankEntry[]) {
 }
 async function pendingEntry(id: number) {
   const entry = await getEntry(id);
-  if (!entry) fail("Bank entry not found.");
-  if (entry.transaction_id) fail("This bank entry has already been processed. Refresh the page.");
+  if (!entry) fail("Bankmutatie niet gevonden.");
+  if (entry.transaction_id) fail("Deze bankmutatie is al verwerkt. Vernieuw de pagina.");
   return entry;
 }
 async function audit(id: number, action: string, transactionId: number, actor: string) {
@@ -99,26 +102,27 @@ async function audit(id: number, action: string, transactionId: number, actor: s
 async function setLink(entry: BankEntry, transactionId: number, actor: string, resolution: "linked" | "created") {
   await db.prepare("UPDATE bank_entries SET transaction_id=?,resolution=?,reviewed_by=?,reviewed_at=now() WHERE id=?").run(transactionId, resolution, actor, entry.id);
   await audit(entry.id, resolution, transactionId, actor);
+  await refreshBankSupplierLinks(actor,[entry.id]);
 }
 async function link(entry: BankEntry, transactionId: number, actor: string, allowUnbalanced = false) {
   const candidate = (await ledgerCandidates(entry.account_id)).find(t => t.id === transactionId);
-  if (!candidate || candidate.amount_cents !== entry.amount_cents) fail("The transaction must be unlinked and have the same bank account, amount and payment direction.");
-  if (candidate.difference !== 0 && !allowUnbalanced) fail("The existing transaction is unbalanced. Acknowledge that warning to link it without changing its ledger lines.");
+  if (!candidate || candidate.amount_cents !== entry.amount_cents) fail("De boeking moet ongekoppeld zijn en dezelfde bankrekening, hetzelfde bedrag en dezelfde betalingsrichting hebben.");
+  if (candidate.difference !== 0 && !allowUnbalanced) fail("De bestaande boeking is niet in evenwicht. Bevestig deze waarschuwing om te koppelen zonder de boekingsregels te wijzigen.");
   await setLink(entry, transactionId, actor, "linked");
 }
 export async function linkEntry(id: number, transactionId: number, actor: string, allowUnbalanced: boolean) {
   return db.transaction(async () => { await lock(); await link(await pendingEntry(id), transactionId, actor, allowUnbalanced); })();
 }
 export async function confirmSuggested(ids: number[], actor: string) {
-  if (!ids.length || ids.length > 10000 || new Set(ids).size !== ids.length) fail("Choose at least one suggested match.");
+  if (!ids.length || ids.length > 10000 || new Set(ids).size !== ids.length) fail("Kies minstens één voorgestelde koppeling.");
   return db.transaction(async () => {
     await lock();
     const entries = (await getEntries()).filter(e => ids.includes(e.id));
     const matches = await getMatches(entries);
-    if (entries.length !== ids.length) fail("Some entries could not be found. Refresh the page.");
+    if (entries.length !== ids.length) fail("Sommige bankmutaties zijn niet gevonden. Vernieuw de pagina.");
     for (const entry of entries) {
       const match = matches.get(entry.id);
-      if (entry.transaction_id || !match?.suggestedId) fail("A suggestion has changed. Refresh and review the matches again.");
+      if (entry.transaction_id || !match?.suggestedId) fail("Een voorstel is gewijzigd. Vernieuw de pagina en controleer de koppelingen opnieuw.");
       await link(entry, match.suggestedId, actor);
     }
     return entries.length;
@@ -127,9 +131,10 @@ export async function confirmSuggested(ids: number[], actor: string) {
 export async function unlinkEntry(id: number, actor: string) {
   return db.transaction(async () => {
     await lock(); const entry = await getEntry(id);
-    if (!entry?.transaction_id) fail("This entry is already unlinked.");
+    if (!entry?.transaction_id) fail("Deze bankmutatie is al ontkoppeld.");
     await audit(id, "unlinked", entry.transaction_id, actor);
     await db.prepare("UPDATE bank_entries SET transaction_id=NULL,resolution=NULL,reviewed_by=NULL,reviewed_at=NULL WHERE id=?").run(id);
+    await refreshBankSupplierLinks(actor,[id]);
   })();
 }
 
@@ -137,25 +142,25 @@ export async function postEntry(id: number, description: string, projectId: numb
   return db.transaction(async () => {
     await lock(); const entry = await pendingEntry(id);
     const preset = selection ? await loadSelectedPreset(selection) : null;
-    if (preset && entry.amount_cents > 0 && !acknowledgeRefund) fail("Confirm the reversed entries for this refund.");
-    if (!description.trim() || description.length > 1000) fail("Enter a description of at most 1,000 characters.");
-    if (!allocations.length || allocations.length > 50) fail("Add between 1 and 50 ledger allocations.");
-    if (allocations.some(a => !Number.isSafeInteger(a.amountCents) || !a.amountCents || a.accountId === entry.account_id)) fail("Each allocation needs an amount and a different ledger account from the bank.");
+    if (preset && entry.amount_cents > 0 && !acknowledgeRefund) fail("Bevestig de tegenboekingen voor deze terugbetaling.");
+    if (!description.trim() || description.length > 1000) fail("Vul een omschrijving van maximaal 1.000 tekens in.");
+    if (!allocations.length || allocations.length > 50) fail("Voeg 1 tot 50 boekingsregels toe.");
+    if (allocations.some(a => !Number.isSafeInteger(a.amountCents) || !a.amountCents || a.accountId === entry.account_id)) fail("Elke boekingsregel heeft een bedrag en een andere grootboekrekening dan de bank nodig.");
     const sum = allocations.reduce((n, a) => n + BigInt(a.amountCents), BigInt(0));
-    if (sum !== BigInt(Math.abs(entry.amount_cents))) fail("The allocations must add up to the full bank amount.");
+    if (sum !== BigInt(Math.abs(entry.amount_cents))) fail("De boekingsregels moeten samen het volledige bankbedrag vormen.");
     const candidates = (await ledgerCandidates(entry.account_id)).filter(t => t.amount_cents === entry.amount_cents && Math.abs(Date.parse(t.transaction_date) - Date.parse(entry.booking_date)) <= 7 * 86400000);
-    if (candidates.length && !acknowledgeCandidates) fail("Possible existing transactions were found. Review them or acknowledge creating a separate transaction.");
-    if (projectId && !(await row("SELECT id FROM projects WHERE id=?", projectId))) fail("Project not found.");
+    if (candidates.length && !acknowledgeCandidates) fail("Er zijn mogelijk bestaande boekingen gevonden. Controleer deze of bevestig dat u een afzonderlijke boeking aanmaakt.");
+    if (projectId && !(await row("SELECT id FROM projects WHERE id=?", projectId))) fail("Project niet gevonden.");
     const accounts = await rows<{ id: number }>("SELECT id FROM accounts WHERE can_post=1");
-    if (!accounts.some(a => a.id === entry.account_id)) fail("The bank ledger account is no longer a posting account.");
-    for (const a of allocations) if (!accounts.some(x => x.id === a.accountId)) fail("Every allocation needs a valid posting account.");
+    if (!accounts.some(a => a.id === entry.account_id)) fail("Op de grootboekrekening van de bank kan niet meer worden geboekt.");
+    for (const a of allocations) if (!accounts.some(x => x.id === a.accountId)) fail("Elke boekingsregel heeft een geldige boekingsrekening nodig.");
     const created = await db.prepare("INSERT INTO transactions (transaction_date,description,reference,project_id) VALUES (?,?,?,?)").run(entry.booking_date, description.trim(), entry.reference || entry.bank_reference, projectId);
     const transactionId = created.lastInsertRowid!;
     const insert = async (accountId: number, signedDebit: number, memo: string) => {
       await db.prepare(`INSERT INTO transaction_lines (transaction_id,account_id,memo,debit_cents,credit_cents)
         VALUES (?,?,?,?,?)`).run(transactionId, accountId, memo, Math.max(signedDebit, 0), Math.max(-signedDebit, 0));
     };
-    await insert(entry.account_id, entry.amount_cents, "Bank statement");
+    await insert(entry.account_id, entry.amount_cents, "Bankafschrift");
     for (const a of allocations) {
       const signedDebit = entry.amount_cents < 0 ? a.amountCents : -a.amountCents;
       await insert(a.accountId, signedDebit, a.memo.slice(0, 500));
