@@ -10,6 +10,7 @@ npm run migrate:auth
 npm run migrate:bank
 npm run migrate:presets
 npm run migrate:vat
+npm run migrate:income-tax
 npm run dev
 ```
 
@@ -143,3 +144,18 @@ De behandeling **Btw-betaling of -teruggaaf — buiten de aangifte** verwerkt de
 Een leverancier kan meerdere onafhankelijke btw-regels hebben. Iedere regel heeft een naam, eigen versiehistorie en pauzeknop. Bestaande regels behouden bij migratie hun historie; nieuwe regels vervangen andere regels niet. Binnen dezelfde leverancier worden de rekeningen, richting en bedragen getoetst om één passende regel te kiezen. Als meerdere regels volledig passen, blijft de boeking ter controle staan.
 
 Voor prepaid leveranciers zoals Openprovider gebruikt u **Leverancierstegoed opwaarderen — buiten de btw-aangifte** voor de storting (bank credit, tegoed debet), uitsluitend wanneer bij opwaarderen geen btw-factuur wordt verstrekt. Maak daarnaast een regel voor de daadwerkelijke aankoop: bijvoorbeeld 5b met kosten en voorbelasting debet, leverancierstegoed credit. De tegoedrekening vervangt daarbij de bank als betaalrekening. Zo wordt btw alleen bij de aankoopfactuur verwerkt. De regels maken geen nieuwe aankoopboekingen of facturen; ze classificeren bestaande en toekomstige geboekte transacties. `npm run migrate:vat` voegt de onafhankelijke regelsleutels toe; `npm run test:supplier-rules` controleert beide stromen, overlapping, afzonderlijk pauzeren en onveranderlijke historie.
+
+
+## Jaarwerkplek inkomstenbelasting (vof)
+
+Voer `npm run migrate:income-tax` uit en open **Rapporten → Inkomstenbelasting** (`/reports/income-tax/2026`). De module bereidt het ondernemingsdeel voor: winst-en-verliesrekening, cumulatieve begin- en eindbalans, kapitaal per vennoot en een persoonlijk aangifteoverzicht. Facturen worden als controlelijst getoond en niet automatisch bij de grootboekomzet opgeteld. Controleer hun verwerking en jaarafgrenzing in het grootboek.
+
+De initiële 100/0-winstverdeling is een onbeoordeeld concept. Vul de namen, het werkelijke beginkapitaal, eventuele arbeidsvergoedingen en percentages in. Arbeidsvergoedingen worden eerst van het te verdelen resultaat afgezonderd; de resterende winst of het verlies volgt de percentages. Kapitaalrechten worden niet uit winstpercentages afgeleid. De centverdeling sluit ook bij verliezen exact aan. Leg de beoordeling van de winstverdeling vast voordat u een gecontroleerde versie bewaart.
+
+Bij **Grootboek indelen** kiest u rubrieken en koppelt u privé- en kapitaalrekeningen aan een vennoot. Deze jaarindeling verandert het grootboek niet. De expliciet door de gebruiker bevestigde rekening ‘Salery’ is in deze installatie standaard als privéonttrekkingen van de werkende vennoot vastgelegd in `income_tax_account_defaults`, ook voor historische jaren. Nieuwe installaties krijgen deze specifieke koppeling niet automatisch. Een gemengde rekening moet eerst worden uitgesplitst. De categorie kapitaalmutaties betreft netto-inbreng/opnamen, niet resultaatbestemming of sluitboekingen.
+
+Aanvullende fiscale correcties worden met toelichting gezamenlijk of per vennoot vastgelegd. Zij veranderen de kapitaalrekening niet. Ontbrekende facturen, afschrijvingen en jaarafgrenzing horen eerst als boekingen in het grootboek. Ondernemersaftrek, mkb-winstvrijstelling, investeringsaftrek, buitenvennootschappelijk vermogen en de persoonlijke IB/Zvw-berekening zijn niet geautomatiseerd; dit is geen volledige fiscale aangiftesoftware.
+
+Controles signaleren ontbrekende rekeningindeling, kapitaalverschillen, niet-sluitende en lege boekingen (ook in eerdere jaren), onverwerkte bankmutaties en een nog lopend boekjaar. De jaarafsluitingsverklaringen gelden voor de brongegevens op het moment van opslaan; gewijzigde bronnen vereisen hercontrole. Concepten kunnen altijd worden bewaard, gecontroleerde versies pas nadat alle controles zijn afgewerkt. Configuratieversies, standaardindelingen en snapshots zijn append-only. Gelijktijdige of verouderde opslag wordt geweigerd. PDF en CSV kunnen zowel actuele concepten als onveranderlijke opgeslagen versies exporteren; exports bevatten status en openstaande controles. Er wordt niets bij de Belastingdienst ingediend.
+
+`npm run test:income-tax` controleert de berekeningen, privéopnamen, leverancierstegoed, fiscale correcties, centverdeling, bronsynchronisatie, concurrentie, export en historie in een geïsoleerd PostgreSQL-schema.

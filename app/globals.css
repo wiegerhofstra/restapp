@@ -276,3 +276,19 @@ p { margin:0; }
 .supplier-rule-preview .bank-check { margin:20px 0; }
 
 .supplier-rule-item + .supplier-rule-item { margin-top:24px; padding-top:24px; border-top:1px solid var(--line); }
+
+.income-workspace { display:grid; gap:22px; min-width:0; }
+.income-workspace .page-header { margin-bottom:0; }
+.income-workspace .card { min-width:0; }
+.income-workspace details > summary { cursor:pointer; font-weight:650; padding:12px 0; }
+.income-workspace li { margin:8px 0; }
+.income-settings details { border-bottom:1px solid var(--line); margin-bottom:18px; padding-bottom:14px; }
+.income-settings .field { margin-top:14px; }
+.income-settings .bank-check,.income-snapshot .bank-check { margin:18px 0; }
+.income-settings input:not([type=checkbox]),.income-settings select,.income-settings textarea { width:100%; min-width:105px; padding:10px; border:1px solid var(--line); border-radius:8px; background:var(--surface); font:inherit; }
+.income-adjustment { display:grid; grid-template-columns:2fr 1fr 1fr auto; align-items:end; gap:12px; margin-bottom:16px; }
+.income-partner + .income-partner { margin-top:26px; }
+.income-source { border-bottom:1px solid var(--line); }
+.income-print-title { display:none; }
+@media(max-width:700px) { .income-adjustment { grid-template-columns:1fr; } .income-metrics { grid-template-columns:1fr; } .income-workspace .table-wrap { max-width:100%; overflow-x:auto; } }
+@media print { .income-print-title { display:block; font-size:20px; font-weight:bold; } .income-workspace { gap:12px; } .income-workspace .card { box-shadow:none; break-inside:avoid; } .income-workspace .table-wrap { overflow:visible; } }

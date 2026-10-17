@@ -23,7 +23,9 @@
     "migrate:vat": "node --env-file-if-exists=.env.local scripts/migrate-vat.mjs",
     "test:vat": "node --env-file-if-exists=.env.local scripts/tests/vat.mjs",
     "test:supplier-rules": "node --env-file-if-exists=.env.local scripts/tests/supplier-rules.mjs",
-    "test:bank-suppliers": "node --env-file-if-exists=.env.local scripts/tests/bank-suppliers.mjs"
+    "test:bank-suppliers": "node --env-file-if-exists=.env.local scripts/tests/bank-suppliers.mjs",
+    "migrate:income-tax": "node --env-file-if-exists=.env.local scripts/migrate-income-tax.mjs",
+    "test:income-tax": "node --env-file-if-exists=.env.local scripts/tests/income-tax.mjs"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

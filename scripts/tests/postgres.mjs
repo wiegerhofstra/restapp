@@ -46,7 +46,7 @@ try {
         if(record)paths.push(`/${table==='time_entries'?'time':table}/${record.id}`);
         if(table==='invoices'&&record)paths.push(`/invoices/${record.id}/preview`);
       }
-      paths.push('/reports/vat/2026/3', '/reports/vat/2026/3?view=all', '/suppliers', '/suppliers/new', '/settings/presets', '/bank', '/bank?view=review', '/bank?view=new', '/bank?view=processed');
+      paths.push('/reports/income-tax/2026', '/reports/income-tax/2024', '/reports/vat/2026/3', '/reports/vat/2026/3?view=all', '/suppliers', '/suppliers/new', '/settings/presets', '/bank', '/bank?view=review', '/bank?view=new', '/bank?view=processed');
       paths.push('/bank?view=all&supplier=missing', '/bank?view=all&supplier=ambiguous');
       const supplier=await row('SELECT id FROM suppliers ORDER BY id LIMIT 1');
       if(supplier) paths.push(`/suppliers/${supplier.id}`, `/bank?view=all&supplier=${supplier.id}`);
