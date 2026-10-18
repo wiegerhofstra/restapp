@@ -1,3 +1,4 @@
+import { requireUser } from "@/lib/auth";
 import { getBankSupplierRules, getBankSupplierLinks } from '@/lib/suppliers/bank';
 import { BankRuleForm, DisableBankRuleForm } from '../bank-forms';
 import Link from 'next/link';
@@ -10,6 +11,8 @@ import type { Supplier, SupplierRule } from '@/lib/vat/supplier-rules';
 import { formatDate, formatDateTime } from '@/lib/format';
 import { SupplierForm, DisableRuleForm } from '../forms';
 export default async function SupplierPage({params,searchParams}:{params:Promise<{id:string}>;searchParams:Promise<{activated?:string}>}) {
+  await requireUser();
+
   const id=Number((await params).id),search=await searchParams;
   const supplier=await row<Supplier>('SELECT * FROM suppliers WHERE id=?',id);if(!supplier)notFound();
   const bankRules=await getBankSupplierRules(id),bankLinks=[...(await getBankSupplierLinks()).values()].filter(l=>l.supplier_id===id);

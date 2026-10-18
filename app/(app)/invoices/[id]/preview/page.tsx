@@ -1,3 +1,4 @@
+import { requireUser } from "@/lib/auth";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -46,6 +47,8 @@ const formatInvoiceMoney = (cents: number, currency: string) =>
   }).format(cents / 100);
 
 export default async function InvoicePreviewPage({ params }: { params: Promise<{ id: string }> }) {
+  await requireUser();
+
   const id = Number((await params).id);
   const invoice = (await row<Invoice>(
     `SELECT i.*,c.name customer_name,c.reference,c.address_line1,c.po_box,c.postal_code,c.city,c.country,c.tax_number

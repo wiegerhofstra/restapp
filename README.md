@@ -39,6 +39,10 @@ Email/password authentication uses [Better Auth's Next.js integration](https://b
 
 Run `npm run test:auth` against a development PostgreSQL database. It uses and removes an isolated schema to verify migration, password compatibility, origin checks, closed registration, session expiry/revocation, rate limiting and concurrent first-run setup.
 
+Every page under `app/(app)` must await `requireUser()` before reading or rendering business data, including forms that load private options. The layout uses the same guard, but cannot protect independently rendered page segments by itself. The guard checks the database session and deduplicates checks only within the current React render. Server actions and export handlers also retain their own authentication checks.
+
+Run `npm run build` followed by `npm run test:auth-pages` to verify page-level protection. This test requires a fully migrated development PostgreSQL database and permission to create a schema. It copies table definitions into a disposable schema, seeds synthetic business data, starts a local production server on an available loopback port, and removes the server and schema afterwards. It checks anonymous HTML, RSC navigation and prefetch bodies, expired/revoked sessions, authenticated pages and exports, and first-run setup. It does not copy or modify existing business records. The suite discovers private pages automatically; new dynamic route parameters and business entities may need additional fixtures.
+
 ## Bank statement imports
 
 Open **Bank imports** (`/bank`) and upload an ING CAMT.053 XML statement, choosing the bank's posting asset account. The IBAN-to-ledger mapping is retained. Run `npm run migrate:bank` once before using this feature; it adds import/reconciliation tables and protects reconciled ledger records from edits. It does not rewrite existing accounting data.

@@ -1,3 +1,4 @@
+import { requireUser } from "@/lib/auth";
 import { getBankSupplierLinks } from '@/lib/suppliers/bank';
 import { RecognizeBankForm } from '../suppliers/bank-forms';
 import Link from "next/link";
@@ -9,6 +10,8 @@ import { ActionForm, SelectSuggested, UploadForm } from "./forms";
 import { reviewSuggested } from "./actions";
 
 export default async function BankPage({ searchParams }: { searchParams: Promise<{ import?: string; view?: string; q?: string; uploaded?: string; supplier?: string }> }) {
+  await requireUser();
+
   const query = await searchParams;
   if (!await schemaReady()) return <><PageHeader title="Bankafschriften"/><div className="bank-message">Voor het importeren van bankafschriften is een database-update nodig. Voer uit: <code>npm run migrate:bank</code>. Vernieuw daarna deze pagina.</div></>;
   const accounts = await rows<{ id: number; name: string }>("SELECT id,name FROM accounts WHERE can_post=1 AND kind='asset' ORDER BY sort_order,name");

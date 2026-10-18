@@ -1,9 +1,12 @@
+import { requireUser } from "@/lib/auth";
 import Link from 'next/link';
 import { PageHeader } from '@/components/ui';
 import { getSuppliers } from '@/lib/suppliers/service';
 import { supplierRules } from '@/lib/vat/service';
 import { supplierTreatmentLabel } from '@/lib/vat/supplier-rules';
 export default async function SuppliersPage() {
+  await requireUser();
+
   const suppliers=await getSuppliers(),rules=await supplierRules();
   return <><PageHeader eyebrow="Relaties" title="Leveranciers" subtitle="Vaste leveranciersgegevens en automatische btw-verwerking voor terugkerende boekingen."><Link className="button" href="/settings/presets">Boekingssjablonen</Link><Link className="button primary" href="/suppliers/new">Leverancier toevoegen</Link></PageHeader>
     <section className="card"><div className="card-body"><p>Bankmutaties worden automatisch aan leveranciers gekoppeld via naam, IBAN of herkenningsregels. Boekingssjablonen vullen de rekeningen bij een bankimport in. Leveranciersregels verwerken daarna de btw van passende boekingen automatisch. Vrijgestelde inkopen blijven buiten de btw-aangifte. U controleert alleen afwijkingen en de complete kwartaalaangifte.</p></div>

@@ -1,3 +1,4 @@
+import { requireUser } from "@/lib/auth";
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { PageHeader } from '@/components/ui';
@@ -8,6 +9,8 @@ import { formatMoney, formatDate } from '@/lib/format';
 import { CopyAmount, SnapshotForm, YearConfigForm } from '../forms';
 
 export default async function IncomeTaxYearPage({params,searchParams}:{params:Promise<{year:string}>;searchParams:Promise<{snapshot?:string;saved?:string}>}) {
+  await requireUser();
+
   const year=Number((await params).year);try{validYear(year);}catch{notFound();}
   const search=await searchParams,{current,snapshots}=await getIncomeTaxWorkspace(year);
   const snapshot=search.snapshot?snapshots.find(s=>s.id===Number(search.snapshot)):undefined;

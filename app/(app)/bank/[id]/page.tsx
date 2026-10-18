@@ -1,3 +1,4 @@
+import { requireUser } from "@/lib/auth";
 import { getSuppliers } from '@/lib/suppliers/service';
 import { getBankSupplierLinks } from '@/lib/suppliers/bank';
 import { BankSupplierForm } from '../../suppliers/bank-forms';
@@ -14,6 +15,8 @@ import { ActionForm, PostingForm } from "../forms";
 import { reviewEntry } from "../actions";
 
 export default async function BankEntryPage({ params }: { params: Promise<{ id: string }> }) {
+  await requireUser();
+
   const id = Number((await params).id);
   if (!Number.isSafeInteger(id) || id <= 0) notFound();
   const entry = await getEntry(id);

@@ -1,3 +1,4 @@
+import { requireUser } from "@/lib/auth";
 import { getSuppliers } from '@/lib/suppliers/service';
 import { getSampleBankLinks } from '@/lib/suppliers/bank';
 import { SupplierRuleForm } from '@/app/(app)/suppliers/forms';
@@ -11,6 +12,8 @@ import { ReviewForm } from '../../../forms';
 import { formatMoney, formatDate, formatDateTime } from '@/lib/format';
 
 export default async function VatReviewPage({params,searchParams}:{params:Promise<{kind:string;id:string}>;searchParams:Promise<{year?:string;quarter?:string;supplier?:string;rule?:string}>}) {
+  await requireUser();
+
   const {kind,id}=await params;const search=await searchParams;
   const suppliers=await getSuppliers();
   const entry=await getReviewEntry(kind,Number(id));if(!entry) notFound();

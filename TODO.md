@@ -1,9 +1,9 @@
 # Stapp improvement checklist
 
-Based on the application review of 17 October 2026. All implementation tasks remain open. Address the private-data exposure first, then accounting correctness and lifecycle safeguards.
+Based on the application review of 17 October 2026. Completed tasks are checked below. Prioritize accounting correctness and lifecycle safeguards after the private-data exposure fix.
 
-- [ ] **1. Critical — Prevent private data in anonymous responses.** Require authentication before private queries and rendering in page entry points or a shared data-access layer. A layout redirect alone currently leaves customer and invoice data in response bodies; customer-data exposure was reproduced in a production build. Add regression tests that inspect anonymous HTML and RSC payloads, including expired sessions and client navigation, rather than checking only redirect status.
-  Sources: `app/(app)/layout.tsx`, private page queries, `lib/auth.ts`.
+- [x] **1. Critical — Prevent private data in anonymous responses.** Completed 18 October 2026. All 35 private pages and the workspace layout await the shared `requireUser()` guard before private queries or rendering. The production regression suite reproduces the original failure against the old build and verifies anonymous HTML, RSC navigation and prefetch, expired/revoked sessions, authenticated access, exports, and first-run setup against synthetic data in a disposable schema. Development response checks and authenticated browser navigation also passed. Run `npm run build` followed by `npm run test:auth-pages` to repeat the production verification.
+  Sources: `app/(app)/layout.tsx`, private page entry points, `lib/auth.ts`, `scripts/tests/auth-pages.mjs`.
 
 - [ ] **2. High — Unify invoice calculations and rounding.** Use one calculation policy across invoice lists, previews, dashboard totals, and reports. PostgreSQL integer division currently truncates values where previews round them. At review time, 77 of 242 invoices differed between calculations, with a total absolute difference of €1.44. Cover fractional quantities, tax rates, and negative credit lines in regression tests.
   Sources: `app/(app)/invoices/page.tsx`, `app/(app)/invoices/[id]/preview/page.tsx`, `app/(app)/page.tsx`, `lib/income-tax/service.ts`.

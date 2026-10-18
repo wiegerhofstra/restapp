@@ -1,3 +1,4 @@
+import { requireUser } from "@/lib/auth";
 import { outsideVatReturn, supplierTreatmentLabel } from '@/lib/vat/supplier-rules';
 import { labelNl } from '@/lib/dutch';
 import Link from 'next/link';
@@ -10,6 +11,8 @@ import { CopyValue, SnapshotForm } from '../../forms';
 
 const guidance='https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/themaoverstijgend/brochures_en_publicaties/toelichting_bij_de_digitale_aangifte_omzetbelasting';
 export default async function VatPage({params,searchParams}:{params:Promise<{year:string;quarter:string}>;searchParams:Promise<{rubric?:string;snapshot?:string;saved?:string;view?:string}>}) {
+  await requireUser();
+
   const p=await params,search=await searchParams,year=Number(p.year),quarter=Number(p.quarter);
   try {period(year,quarter);} catch {notFound();}
   const {current,snapshots}=await getWorkspace(year,quarter);

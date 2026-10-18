@@ -11,6 +11,7 @@
     "migrate:postgres": "node scripts/migrate-to-postgres.mjs",
     "migrate:auth": "node --env-file-if-exists=.env.local scripts/migrate-auth.mjs",
     "test:auth": "node --env-file-if-exists=.env.local scripts/tests/auth.mjs",
+    "test:auth-pages": "node --env-file-if-exists=.env.local scripts/tests/auth-pages.mjs",
     "test:postgres": "node --env-file=.env.local scripts/tests/postgres.mjs",
     "migrate:bank": "node --env-file-if-exists=.env.local scripts/migrate-bank.mjs",
     "test:bank": "node --env-file-if-exists=.env.local scripts/tests/bank.mjs",

@@ -1,3 +1,4 @@
+import { requireUser } from "@/lib/auth";
 import { ArrowRight, Building2, Clock3, FilePlus2, FileText, Plus, ReceiptText, Scale, WalletCards } from "lucide-react";
 import Link from "next/link";
 import { row, rows } from "@/lib/db";
@@ -7,6 +8,8 @@ import { EmptyState, PageHeader } from "@/components/ui";
 type RecentTransaction = { id:number; transaction_date:string; description:string; project_name:string|null; customer_name:string|null; amount:number };
 
 export default async function DashboardPage() {
+  await requireUser();
+
   const currency = (await row<{ value:string }>("SELECT value FROM settings WHERE key='currency'"))?.value || "EUR";
   const outstanding = (await row<{ total:number; count:number }>(`SELECT COALESCE(SUM((l.quantity_milli * l.unit_price_cents / 1000) * (10000 + l.tax_rate_basis_points) / 10000),0) total,
     COUNT(DISTINCT i.id) count FROM invoices i LEFT JOIN invoice_lines l ON l.invoice_id=i.id WHERE i.status IN ('sent','overdue')`))!;

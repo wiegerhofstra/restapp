@@ -1,3 +1,4 @@
+import { requireUser } from "@/lib/auth";
 import { labelNl } from '@/lib/dutch';
 import Link from 'next/link';
 import { PageHeader, Field } from '@/components/ui';
@@ -9,6 +10,8 @@ import { PresetForm } from './preset-form';
 import { addRuleAction, removeRuleAction } from './actions';
 
 export default async function PresetsPage() {
+  await requireUser();
+
   if (!await presetsReady()) return <><PageHeader title="Boekingssjablonen"/><p>Er zijn nog geen boekingssjablonen ingesteld.</p></>;
   const presets = await getPresets(true), rules = await getPresetRules();
   const accounts = await rows<PostingAccount>('SELECT id,name,kind FROM accounts WHERE can_post=1 ORDER BY name');

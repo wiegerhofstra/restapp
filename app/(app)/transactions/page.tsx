@@ -1,3 +1,4 @@
+import { requireUser } from "@/lib/auth";
 import { ChevronLeft, ChevronRight, Plus, Search } from "lucide-react";
 import Link from "next/link";
 import { row, rows } from "@/lib/db";
@@ -7,6 +8,8 @@ import { EmptyState, PageHeader } from "@/components/ui";
 type Transaction={id:number;transaction_date:string;description:string;reference:string;project_name:string|null;customer_name:string|null;debit:number;credit:number};
 
 export default async function TransactionsPage({searchParams}:{searchParams:Promise<{q?:string;page?:string}>}){
+  await requireUser();
+
   const query=await searchParams;
   const search=(query.q||"").trim();
   const page=Math.max(1,Number(query.page)||1);
