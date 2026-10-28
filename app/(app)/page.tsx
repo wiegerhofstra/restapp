@@ -11,8 +11,8 @@ export default async function DashboardPage() {
   await requireUser();
 
   const currency = (await row<{ value:string }>("SELECT value FROM settings WHERE key='currency'"))?.value || "EUR";
-  const outstanding = (await row<{ total:number; count:number }>(`SELECT COALESCE(SUM((l.quantity_milli * l.unit_price_cents / 1000) * (10000 + l.tax_rate_basis_points) / 10000),0) total,
-    COUNT(DISTINCT i.id) count FROM invoices i LEFT JOIN invoice_lines l ON l.invoice_id=i.id WHERE i.status IN ('sent','overdue')`))!;
+  const outstanding = (await row<{ total:number; count:number }>(`SELECT COALESCE(SUM(a.total_cents),0)::bigint total,
+    COUNT(*) count FROM invoices i JOIN invoice_amounts a ON a.invoice_id=i.id WHERE i.status IN ('sent','overdue')`))!;
   const customerCount = (await row<{ count:number }>("SELECT COUNT(*) count FROM customers WHERE archived_at IS NULL"))!.count;
   const accountCount = (await row<{ count:number }>("SELECT COUNT(*) count FROM accounts"))!.count;
   const tracked = (await row<{ minutes:number }>(`SELECT COALESCE(SUM(EXTRACT(EPOCH FROM (COALESCE(ended_at::timestamptz,CURRENT_TIMESTAMP)-started_at::timestamptz))/60),0) minutes

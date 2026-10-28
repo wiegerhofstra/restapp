@@ -1,3 +1,4 @@
+import { migrateInvoiceAmounts } from '../lib/migrate-invoice-amounts.mjs';
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 import pg from 'pg';
@@ -37,7 +38,7 @@ try {
     CREATE TABLE invoice_lines(id bigint PRIMARY KEY,invoice_id bigint,description text,quantity_milli bigint,unit_price_cents bigint,tax_rate_basis_points bigint);
     INSERT INTO accounts(id,name,kind) VALUES(1,'Bank','asset'),(2,'Hosting','expense'),(3,'BTW advanced 21% verlegd','asset'),(4,'BTW 21% verlegd','liability');
   `);
-  await migrateBank(admin);await migrateVat(admin);await migrateVat(admin);
+  await migrateBank(admin);await migrateInvoiceAmounts(admin);await migrateVat(admin);await migrateVat(admin);
   const url=new URL(process.env.DATABASE_URL);url.searchParams.set('options',`-c search_path=${schema}`);process.env.DATABASE_URL=url.toString();
   const {db,row,getPool}=await import('../../lib/db.ts');pool=getPool();
   const {importStatement,getEntries,postEntry}=await import('../../lib/bank/service.ts');

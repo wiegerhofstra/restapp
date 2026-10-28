@@ -6,6 +6,7 @@ import { ArrowLeft } from "lucide-react";
 import { PrintButton } from "@/components/print-button";
 import { PageHeader } from "@/components/ui";
 import { row, rows } from "@/lib/db";
+import { getInvoiceAmounts } from "@/lib/invoices";
 
 type Invoice = {
   id: number;
@@ -22,14 +23,6 @@ type Invoice = {
   city: string;
   country: string;
   tax_number: string;
-};
-
-type Line = {
-  id: number;
-  description: string;
-  quantity_milli: number;
-  unit_price_cents: number;
-  tax_rate_basis_points: number;
 };
 
 const formatInvoiceDate = (value: string) =>
@@ -60,19 +53,11 @@ export default async function InvoicePreviewPage({ params }: { params: Promise<{
   ));
   if (!invoice) notFound();
 
-  const lines = (await rows<Line>("SELECT * FROM invoice_lines WHERE invoice_id=? ORDER BY sort_order,id", id));
+  const { lines, net, tax, total } = await getInvoiceAmounts(id);
   const settings = Object.fromEntries(
     (await rows<{ key: string; value: string }>("SELECT key,value FROM settings")).map((setting) => [setting.key, setting.value]),
   );
   const currency = settings.currency || "EUR";
-  const net = lines.reduce(
-    (total, line) => total + Math.round((line.quantity_milli * line.unit_price_cents) / 1000),
-    0,
-  );
-  const tax = lines.reduce((total, line) => {
-    const base = Math.round((line.quantity_milli * line.unit_price_cents) / 1000);
-    return total + Math.round((base * line.tax_rate_basis_points) / 10000);
-  }, 0);
 
   return (
     <>
@@ -134,7 +119,7 @@ export default async function InvoicePreviewPage({ params }: { params: Promise<{
           </thead>
           <tbody>
             {lines.map((line) => {
-              const total = Math.round((line.quantity_milli * line.unit_price_cents) / 1000);
+              const total = line.net_cents;
               return (
                 <tr key={line.id}>
                   <td>{line.description}</td>
@@ -151,7 +136,7 @@ export default async function InvoicePreviewPage({ params }: { params: Promise<{
         <div className="invoice-total" style={{ marginTop: 28 }}>
           <div><span>Subtotaal</span><strong>{formatInvoiceMoney(net, currency)}</strong></div>
           <div><span>Btw</span><strong>{formatInvoiceMoney(tax, currency)}</strong></div>
-          <div className="grand"><span>Totaal</span><span>{formatInvoiceMoney(net + tax, currency)}</span></div>
+          <div className="grand"><span>Totaal</span><span>{formatInvoiceMoney(total, currency)}</span></div>
         </div>
 
         <div className="invoice-footer">

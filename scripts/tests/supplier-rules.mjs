@@ -1,3 +1,4 @@
+import { migrateInvoiceAmounts } from '../lib/migrate-invoice-amounts.mjs';
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 import pg from 'pg';
@@ -94,7 +95,7 @@ try {
     INSERT INTO transactions VALUES(1,'2026-07-07','Google Apps example.nl','inv-1'),(2,'2026-08-07','Google Apps example.nl','inv-2');
     INSERT INTO transaction_lines(transaction_id,account_id,debit_cents,credit_cents) VALUES(1,3,0,1360),(1,4,1360,0),(1,5,286,0),(1,6,0,286),(2,3,0,1360),(2,4,1360,0),(2,5,286,0),(2,6,0,286);
   `);
-  await migrateVat(admin);await migrateVat(admin);
+  await migrateInvoiceAmounts(admin);await migrateVat(admin);await migrateVat(admin);
   const url=new URL(process.env.DATABASE_URL);url.searchParams.set('options',`-c search_path=${schema}`);process.env.DATABASE_URL=url.toString();
   const {getPool,db,row}=await import('../../lib/db.ts');pool=getPool();
   const {getReviewEntry,getWorkspace,saveReview,saveSnapshot,supplierRules}=await import('../../lib/vat/service.ts');

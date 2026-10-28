@@ -21,11 +21,10 @@ async function loadYear(year:number):Promise<Workspace> {
   const empty=await rows<{id:number}>(`SELECT t.id FROM transactions t WHERE t.transaction_date<=? AND NOT EXISTS(SELECT 1 FROM transaction_lines l WHERE l.transaction_id=t.id) ORDER BY t.id`,end);
   // Invoices are evidence, never a second revenue stream: payments may already have been posted to revenue.
   const invoices=await rows<Invoice>(`SELECT i.id,i.invoice_number number,i.issue_date date,i.status,i.paid_date "paidDate",i.concern description,
-    COALESCE(SUM(ROUND(l.quantity_milli*l.unit_price_cents/1000.0)),0) net,
-    COALESCE(SUM(ROUND(ROUND(l.quantity_milli*l.unit_price_cents/1000.0)*l.tax_rate_basis_points/10000.0)),0) tax
-    FROM invoices i LEFT JOIN invoice_lines l ON l.invoice_id=i.id
+    a.net_cents net, a.tax_cents tax
+    FROM invoices i JOIN invoice_amounts a ON a.invoice_id=i.id
     WHERE i.issue_date<=? AND (i.issue_date>=? OR (i.status NOT IN ('draft','cancelled') AND (i.paid_date IS NULL OR i.paid_date='' OR i.paid_date>?)))
-    GROUP BY i.id ORDER BY i.issue_date,i.id`,end,start,start);
+    ORDER BY i.issue_date,i.id`,end,start,start);
   const pending=await rows<Pending>(`SELECT id,booking_date date,description,amount_cents amount FROM bank_entries WHERE booking_date BETWEEN ? AND ? AND transaction_id IS NULL ORDER BY booking_date,id`,start,end);
   const version=await row<ConfigVersion>('SELECT id,payload FROM income_tax_configs WHERE year=? ORDER BY id DESC LIMIT 1',year);
   const config=version?.payload??defaultConfig();

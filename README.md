@@ -9,6 +9,7 @@ npm install
 npm run migrate:auth
 npm run migrate:bank
 npm run migrate:presets
+npm run migrate:invoice-amounts
 npm run migrate:vat
 npm run migrate:income-tax
 npm run dev
@@ -78,6 +79,18 @@ During bank review, specific counterparty-name, description, or exact-IBAN rules
 For an empty manual transaction, choose the bank account, payment/refund, amount, and whether it is net or total, then apply a preset and review **Post preset entries**. Existing lines are never silently overwritten or appended by presets. Both workflows use the same integer-cent calculation and verify balanced allocations on the server. Editing a preset invalidates older open drafts; refresh and apply it again. An application snapshot retains the original preset settings, generated allocations, reviewed allocations, direction, and actor. Later preset edits leave previous postings and snapshots unchanged.
 
 Run `npm run test:presets` for rounding, gross/net calculations, reverse charge, supplier rules, refunds, repeatable migrations, concurrent posting, stale drafts, ledger protection, and snapshot preservation. Integration records live in a disposable PostgreSQL schema.
+
+## Invoice calculations
+
+Run `npm run migrate:invoice-amounts` after the base invoice tables exist and before starting the updated app. The repeatable migration adds `invoice_line_amounts` and `invoice_amounts` views; it does not rewrite invoice records or saved tax snapshots.
+
+Each line's net amount is rounded to cents from quantity × unit price. VAT is then rounded to cents from that rounded net amount, and the line total is net + VAT. Invoice totals sum those rounded lines. PostgreSQL exact numeric arithmetic rounds half cents away from zero, so a credit exactly reverses the corresponding charge. Invoice lists, details, previews, reminders, the dashboard, VAT suggestions and annual invoice evidence all consume these views.
+
+For example, 1.5 units at €1.01 with 21% VAT gives €1.52 net + €0.32 VAT = €1.84. A €19.99 line at 21% gives €24.19 including VAT. Applying this policy to the 242 existing invoices leaves their previews unchanged and corrects 77 list totals (a combined absolute difference of €1.44).
+
+Existing invoice VAT reviews require rechecking because their source evidence now includes the canonical calculated amounts. Previously reviewed values and frozen tax snapshots remain intact. New reviews use the current source fingerprint.
+
+`npm run test:invoice-amounts` checks fractional quantities, tax rates, credits, half cents, empty/mixed invoices, large amounts and migration repeatability in a disposable schema. The VAT and annual-tax suites check report consistency and snapshot preservation. After `npm run build`, `npm run test:auth-pages` also verifies matching invoice totals in dashboard, list, detail and preview responses.
 
 ## Data and security
 

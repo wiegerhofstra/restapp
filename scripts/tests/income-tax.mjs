@@ -1,3 +1,4 @@
+import { migrateInvoiceAmounts } from '../lib/migrate-invoice-amounts.mjs';
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 import pg from 'pg';
@@ -59,7 +60,7 @@ try{
   await admin.query(`INSERT INTO invoices VALUES(1,2024001,'2024-02-01','paid','2024-02-01','Omzetfactuur'),(2,2023001,'2023-12-01','paid','2024-01-15','Vorig jaar open'),(3,2022001,'2022-12-01','paid','2022-12-15','Al afgewikkeld');
     INSERT INTO invoice_lines VALUES(1,1,1000,12100,0),(2,2,1000,900,0);
     INSERT INTO bank_entries VALUES(1,'2024-07-01','Nog te verwerken',500,NULL,NULL);`);
-  await migrateIncomeTax(admin);await migrateIncomeTax(admin);
+  await migrateInvoiceAmounts(admin);await migrateIncomeTax(admin);await migrateIncomeTax(admin);
   await admin.query(`INSERT INTO income_tax_account_defaults(account_id,category,partner_key,note,actor) VALUES(4,'withdrawal','primary','Bevestigd door gebruiker','test')`);
   const url=new URL(process.env.DATABASE_URL);url.searchParams.set('options',`-c search_path=${schema}`);process.env.DATABASE_URL=url.toString();
   const {getPool,row}=await import('../../lib/db.ts');pool=getPool();
@@ -98,5 +99,16 @@ try{
   await assert.rejects(admin.query('DELETE FROM income_tax_account_defaults'),/append-only/);
   await migrateIncomeTax(admin);
   assert.equal((await admin.query('SELECT count(*)::int n FROM transaction_lines')).rows[0].n,lines.length);
+  // Annual evidence consumes the same rounded amounts as invoices and VAT.
+  await admin.query(`INSERT INTO invoices VALUES(4,2024004,'2024-10-01','sent','','Fractional sale'),(5,2024005,'2024-10-01','sent','','Credit');
+    INSERT INTO invoice_lines VALUES(4,4,1500,101,2100),(5,4,1000,1999,2100),(6,5,1500,-101,2100);`);
+  const {current:rounded}=await getIncomeTaxWorkspace(2024);
+  assert.equal(rounded.invoices.find(i=>i.id===4).net,2151);
+  assert.equal(rounded.invoices.find(i=>i.id===4).tax,452);
+  assert.equal(rounded.invoices.find(i=>i.id===5).net,-152);
+  assert.equal(rounded.invoices.find(i=>i.id===5).tax,-32);
+  await migrateInvoiceAmounts(admin);
+  assert.deepEqual((await row('SELECT payload FROM income_tax_snapshots WHERE id=?',draft)).payload,frozen);
+  console.log('PASS: annual invoice evidence uses canonical fractional/credit amounts and preserves saved snapshots');
   console.log('PASS: isolated PostgreSQL, idempotent migration, default private classification, invoice deduplication, pending NULL bank links, concurrency, source changes, immutable snapshots, exports and no source mutations');
 }finally{if(pool)await pool.end();await admin.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);await admin.end();}

@@ -8,6 +8,7 @@ import { resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import pg from 'pg';
 import { authFixture } from './auth-fixture.mjs';
+import { migrateInvoiceAmounts } from '../lib/migrate-invoice-amounts.mjs';
 
 // Exercise real Next.js HTML/RSC responses, not just auth API responses or
 // redirect status codes. Run `npm run build` first. Only table definitions are
@@ -47,6 +48,7 @@ try {
     await admin.query(`CREATE TABLE ${quote(schema)}.${quote(tablename)} (LIKE ${quote(sourceSchema)}.${quote(tablename)} INCLUDING ALL)`);
   }
   assert.equal((await pool.query('SELECT current_schema() name')).rows[0].name, schema);
+  await migrateInvoiceAmounts(pool);
   await pool.query(`INSERT INTO customers(id,name,reference) VALUES(1,$1,'TEST')`, [marker]);
   await pool.query(`INSERT INTO projects(id,customer_id,name) VALUES(1,1,$1)`, [marker]);
   await pool.query(`INSERT INTO accounts(id,name,kind) VALUES(1,$1,'asset'),(2,$1,'expense')`, [marker]);
@@ -55,7 +57,11 @@ try {
     VALUES(1,1,0,1210),(1,2,1210,0)`);
   await pool.query(`INSERT INTO invoices(id,invoice_number,reference_number,issue_date,due_date,concern,project_id,status)
     VALUES(1,1,1,'2026-07-01','2026-07-31',$1,1,'sent')`, [marker]);
-  await pool.query(`INSERT INTO invoice_lines(invoice_id,description,unit_price_cents) VALUES(1,$1,1000)`, [marker]);
+  await pool.query(`INSERT INTO invoice_lines(invoice_id,description,quantity_milli,unit_price_cents) VALUES(1,$1,1500,101),(1,$1,1000,1999)`, [marker]);
+  await pool.query(`INSERT INTO invoices(id,invoice_number,reference_number,issue_date,due_date,concern,project_id,status)
+    VALUES(2,2,2,'2026-07-01','2026-07-31',$1,1,'paid')`, [marker]);
+  await pool.query(`INSERT INTO invoice_lines(invoice_id,description,quantity_milli,unit_price_cents)
+    VALUES(2,$1,1500,-101)`, [marker]);
   await pool.query(`INSERT INTO time_entries(id,project_id,name,started_at,ended_at)
     VALUES(1,1,$1,'2026-07-01T09:00:00Z','2026-07-01T10:00:00Z')`, [marker]);
   await pool.query(`INSERT INTO reports(id,name,start_date,end_date) VALUES(1,$1,'2026-07-01','2026-09-30')`, [marker]);
@@ -160,9 +166,19 @@ try {
     } else {
       assert.equal(response.status, 200, `Authenticated page failed: ${path}`);
       assert(!body.includes('"digest":"') && !body.includes('Er is iets misgegaan'), `Runtime error: ${path}`);
+      if (['/', '/invoices', '/invoices/1', '/invoices/1/preview'].includes(path)) {
+        assert.match(body, /26,03/, `Canonical invoice total missing: ${path}`);
+      }
       if (!path.endsWith('/new')) assert(body.includes(marker), `Fixture data missing: ${path}`);
     }
   }
+  for (const path of ['/invoices/2', '/invoices/2/preview']) {
+    const { response, body } = await request(path, modes[0], cookie);
+    assert.equal(response.status, 200);
+    assert.match(body, /1,84/, `Symmetric credit total missing: ${path}`);
+    assert(!body.includes('1,83'), `Legacy credit rounding remains: ${path}`);
+  }
+  console.log('PASS: dashboard, list, detail and preview share invoice totals; credit previews reverse half cents');
   const navigation = await request('/invoices/1/preview', modes[1], cookie);
   assert.equal(navigation.response.status, 200);
   assert(navigation.response.headers.get('content-type')?.includes('text/x-component'));

@@ -23,8 +23,8 @@ export async function sources():Promise<Source[]> {
     FROM transactions t LEFT JOIN transaction_lines l ON l.transaction_id=t.id LEFT JOIN accounts a ON a.id=l.account_id GROUP BY t.id ORDER BY t.id`);
   const invoices=await rows<{id:number;date:string;description:string;reference:string;status:string;lines:Record<string,unknown>[]}>(`
     SELECT i.id,i.issue_date date,i.concern description,i.invoice_number::text reference,i.status,
-      COALESCE(jsonb_agg(jsonb_build_object('id',l.id,'description',l.description,'quantity',l.quantity_milli,'price',l.unit_price_cents,'rate',l.tax_rate_basis_points) ORDER BY l.id) FILTER(WHERE l.id IS NOT NULL),'[]') lines
-    FROM invoices i LEFT JOIN invoice_lines l ON l.invoice_id=i.id GROUP BY i.id ORDER BY i.id`);
+      COALESCE(jsonb_agg(jsonb_build_object('id',l.id,'description',l.description,'quantity',l.quantity_milli,'price',l.unit_price_cents,'rate',l.tax_rate_basis_points,'net',l.net_cents,'tax',l.tax_cents) ORDER BY l.id) FILTER(WHERE l.id IS NOT NULL),'[]') lines
+    FROM invoices i LEFT JOIN invoice_line_amounts l ON l.invoice_id=i.id GROUP BY i.id ORDER BY i.id`);
   return [...transactions.map(t=>({...t,kind:'transaction' as const,balance:t.lines.reduce((n,l)=>n+Number(l.debit)-Number(l.credit),0)})),
     ...invoices.map(i=>({...i,kind:'invoice' as const,balance:0}))].map(s=>({...s,hash:hash(s)}));
 }
@@ -70,8 +70,8 @@ export function suggest(source:Source):{lines:VatLine[];hint:string} {
   if(source.kind==='invoice') {
     if(source.status==='draft'||source.status==='cancelled') return {lines:[],hint:"Conceptfactuur of geannuleerde factuur: controleer of deze is uitgereikt voordat u deze uitsluit."};
     return {lines:source.lines.map(l=>{
-      const base=Math.round(Number(l.quantity)*Number(l.price)/1000), rate=Number(l.rate);
-      return line(rate===2100?'1a':rate===900||rate===600?'1b':rate===0?'1e':'1c',base,Math.round(base*rate/10000));
+      const base=Number(l.net), rate=Number(l.rate);
+      return line(rate===2100?'1a':rate===900||rate===600?'1b':rate===0?'1e':'1c',base,Number(l.tax));
     }),hint:"Controleer de factuurdatum en het land van de klant. Neem de factuur één keer op. Sluit de bijbehorende betaling uit van de btw-aangifte en vermeld het factuurkenmerk."};
   }
   const net=(l:Record<string,unknown>)=>Number(l.debit)-Number(l.credit);

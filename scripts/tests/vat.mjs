@@ -1,3 +1,4 @@
+import { migrateInvoiceAmounts } from '../lib/migrate-invoice-amounts.mjs';
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 import pg from 'pg';
@@ -67,7 +68,7 @@ try {
     INSERT INTO transactions VALUES(1,'2026-07-08','Netcup','nc-123');
     INSERT INTO transaction_lines(transaction_id,account_id,debit_cents,credit_cents) VALUES(1,3,0,1990),(1,36,1990,0),(1,30,418,0),(1,31,0,418);
   `);
-  await migrateVat(admin);await migrateVat(admin);
+  await migrateInvoiceAmounts(admin);await migrateVat(admin);await migrateVat(admin);
   const url=new URL(process.env.DATABASE_URL);url.searchParams.set('options',`-c search_path=${schema}`);process.env.DATABASE_URL=url.toString();
   const {getPool,db,row}=await import('../../lib/db.ts');pool=getPool();
   const {getWorkspace,getReviewEntry,saveReview,saveSnapshot,hash}=await import('../../lib/vat/service.ts');
@@ -132,6 +133,25 @@ try {
   const csv=vatCsv(frozen,'SUBMITTED');assert.match(csv,/4,18/);assert.match(csv,/"Rubriek";"Omschrijving"/);assert.ok(csv.startsWith('\uFEFF'));assert.match(csv,/"Boeking"/);assert.match(csv,/Invoice nc-123/);
   const pdf=await PDFDocument.load(await vatPdf(frozen,'SUBMITTED'));
   assert.ok(pdf.getPageCount()>0);assert.match(pdf.getTitle(),/2026 kwartaal 3/);
+  await admin.query(`INSERT INTO invoices VALUES(2,'2026-07-11','Fractional sale',1002,'sent'),(3,'2026-07-11','Credit',1003,'sent');
+    INSERT INTO invoice_lines VALUES(2,2,'Fractional',1500,101,2100),(3,2,'Standard',1000,1999,2100),(4,3,'Credit',1500,-101,2100);`);
+  const sale=await getReviewEntry('invoice',2), credit=await getReviewEntry('invoice',3);
+  assert.deepEqual(sale.lines,[line('1a',152,32,0,'2026-07-11'),line('1a',1999,420,0,'2026-07-11')]);
+  assert.deepEqual(credit.lines,[line('1a',-152,-32,0,'2026-07-11')]);
+  // Old reviews lack canonical amounts in their source evidence. Preserve the
+  // reviewed values but require rechecking against the new source hash.
+  const oldSource=structuredClone(sale.source);delete oldSource.hash;
+  for(const l of oldSource.lines){delete l.net;delete l.tax;}
+  const oldHash=hash(oldSource);oldSource.hash=oldHash;
+  await db.prepare(`INSERT INTO vat_reviews(source_kind,source_id,source_hash,source_snapshot,lines,note,actor)
+    VALUES('invoice',2,?,?,?,'Original reviewed invoice','test')`).run(oldHash,JSON.stringify(oldSource),JSON.stringify(sale.lines));
+  const stale=await getReviewEntry('invoice',2);
+  assert.equal(stale.state,'changed');assert.deepEqual(stale.lines,sale.lines);
+  await migrateInvoiceAmounts(admin);
+  assert.deepEqual((await row('SELECT payload FROM vat_snapshots WHERE id=?',submittedId)).payload,frozen);
+  await saveReview('invoice',2,stale.source.hash,stale.review.id,stale.lines,'Rechecked calculated amounts','test');
+  assert.equal((await getReviewEntry('invoice',2)).state,'reviewed');
+  console.log('PASS: canonical fractional/credit VAT, stale legacy invoice reviews, and unchanged saved snapshots');
   console.log('PASS: repeatable migration, review gating, concurrent/stale reviews, immutable submission evidence, quarter moves, unpaid invoices, pending bank entries, deleted sources, CSV and real PDF output');
 } finally {if(pool)await pool.end();await admin.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);await admin.end();}
 
