@@ -15,6 +15,11 @@ export function formatDate(value: string | null | undefined) {
   }).format(new Date(`${value.slice(0, 10)}T12:00:00`));
 }
 
+// Screen variant: non-breaking spaces keep "31 okt 2025" on one line in narrow table columns.
+export function formatDay(value: string | null | undefined) {
+  return formatDate(value).replace(/ /g, "\u00a0");
+}
+
 export function formatDateTime(value: string | null | undefined) {
   if (!value) return "—";
   return new Intl.DateTimeFormat("nl-NL", {

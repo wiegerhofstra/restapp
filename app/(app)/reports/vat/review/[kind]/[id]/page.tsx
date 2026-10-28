@@ -9,7 +9,7 @@ import { PageHeader } from '@/components/ui';
 import { getReviewEntry, ruleContexts, supplierRules } from '@/lib/vat/service';
 import { period } from '@/lib/vat/calculation';
 import { ReviewForm } from '../../../forms';
-import { formatMoney, formatDate, formatDateTime } from '@/lib/format';
+import { formatMoney, formatDay, formatDateTime } from '@/lib/format';
 
 export default async function VatReviewPage({params,searchParams}:{params:Promise<{kind:string;id:string}>;searchParams:Promise<{year?:string;quarter?:string;supplier?:string;rule?:string}>}) {
   await requireUser();
@@ -23,7 +23,7 @@ export default async function VatReviewPage({params,searchParams}:{params:Promis
   const rule=search.rule==='new'?undefined:rules.find(r=>r.id===Number(search.rule))??entry.supplierRule??(sampleRules.length===1?sampleRules[0]:undefined);
   const ruleContext=kind==='transaction'?(await ruleContexts()).get(entry.source.id):undefined;
   const sampleBanks=kind==='transaction'?await getSampleBankLinks(entry.source.id):[];
-  return <><PageHeader title="Btw-behandeling controleren" subtitle={`${labelNl(entry.source.kind)} #${id} · ${formatDate(entry.source.date)} · ${entry.source.description}`}>
+  return <><PageHeader title="Btw-behandeling controleren" subtitle={`${labelNl(entry.source.kind)} #${id} · ${formatDay(entry.source.date)} · ${entry.source.description}`}>
     <Link className="button" href={`/reports/vat/${year}/${quarter}#evidence`}>Terug naar aangifte</Link>
     {!entry.source.deleted&&<Link className="button" href={`/${kind==='invoice'?'invoices':'transactions'}/${id}`}>Bron openen</Link>}
   </PageHeader><div className="bank-message warning">{entry.hint}</div>

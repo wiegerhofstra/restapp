@@ -1,7 +1,7 @@
 "use client";
 
 import { authClient } from "@/lib/auth-client";
-import { CircleDollarSign } from "lucide-react";
+import { Scale } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useActionState } from "react";
@@ -28,8 +28,8 @@ export function LoginForm() {
   }, "");
 
   return <form action={submit} className="auth-form">
-    <Link href="/" className="brand"><span className="brand-mark"><CircleDollarSign size={21} /></span>stapp</Link>
-    <div className="eyebrow">Welkom terug</div><h1>Inloggen bij Stapp</h1>
+    <Link href="/" className="brand"><span className="brand-mark"><Scale size={17} strokeWidth={2.25} /></span>stapp</Link>
+    <h1>Inloggen bij Stapp</h1>
     <p>Gebruik het beheerdersaccount dat bij de inrichting is aangemaakt.</p>
     {error && <div className="error-message" role="alert">{error}</div>}
     <div className="grid">

@@ -1,15 +1,17 @@
 import type { Metadata } from "next";
-import { DM_Sans, Manrope } from "next/font/google";
+import { Proza_Libre, Public_Sans } from "next/font/google";
 import "./globals.css";
 
-const bodyFont = DM_Sans({
+const bodyFont = Public_Sans({
   variable: "--font-body",
   subsets: ["latin"],
 });
 
-const headingFont = Manrope({
+// Dutch humanist sans (Bureau Roffa) for headings.
+const headingFont = Proza_Libre({
   variable: "--font-heading",
   subsets: ["latin"],
+  weight: ["500", "600", "700"],
 });
 
 export const metadata: Metadata = {

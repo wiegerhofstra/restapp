@@ -1,11 +1,12 @@
 import { requireUser } from "@/lib/auth";
 import Link from 'next/link';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { notFound } from 'next/navigation';
 import { PageHeader } from '@/components/ui';
 import { PrintButton } from '@/components/print-button';
 import { getIncomeTaxWorkspace } from '@/lib/income-tax/service';
 import { categories, validYear } from '@/lib/income-tax/calculation';
-import { formatMoney, formatDate } from '@/lib/format';
+import { formatMoney, formatDay } from '@/lib/format';
 import { CopyAmount, SnapshotForm, YearConfigForm } from '../forms';
 
 export default async function IncomeTaxYearPage({params,searchParams}:{params:Promise<{year:string}>;searchParams:Promise<{snapshot?:string;saved?:string}>}) {
@@ -21,17 +22,15 @@ export default async function IncomeTaxYearPage({params,searchParams}:{params:Pr
   const balance=w.accountRows.filter(a=>['fixed_assets','receivables','cash','other_assets','debts'].includes(a.category)&&(a.opening||a.closing||a.count));
   const used=w.accountRows.filter(a=>a.count||a.opening||a.closing);
   return <div className="income-workspace">
-    <PageHeader eyebrow="Vof · Jaarwerkplek" title={`Inkomstenbelasting ${year}`} subtitle="Van gezamenlijke jaarcijfers naar een persoonlijk overzicht per vennoot.">
-      <Link href={`${download}csv`} className="button">CSV downloaden</Link><Link href={`${download}pdf`} className="button">PDF downloaden</Link><PrintButton/>
+    <PageHeader title={`Inkomstenbelasting ${year}`} subtitle="Van gezamenlijke jaarcijfers naar een persoonlijk overzicht per vennoot.">
+      {!snapshot&&<a href="#instellingen" className="button">Jaarinstellingen aanpassen</a>}<Link href={`${download}csv`} className="button">CSV downloaden</Link><Link href={`${download}pdf`} className="button">PDF downloaden</Link><PrintButton/>
     </PageHeader>
-    {!snapshot&&<a href="#instellingen" className="button no-print">Jaarinstellingen aanpassen</a>}
-    <nav className="vat-period-nav no-print" aria-label="Boekjaar"><Link href={`/reports/income-tax/${year-1}`}>← {year-1}</Link><span className={`badge ${concept?'':'active'}`}>{concept?'Concept':'Gecontroleerde versie'}{snapshot?` #${snapshot.id}`:''}</span><Link href={`/reports/income-tax/${year+1}`}>{year+1} →</Link></nav>
+    <nav className="vat-period-nav no-print" aria-label="Boekjaar"><Link href={`/reports/income-tax/${year-1}`}><ChevronLeft size={15}/>{year-1}</Link><span className={`badge ${concept?'':'active'}`}>{concept?'Concept':'Gecontroleerde versie'}{snapshot?` #${snapshot.id}`:''}</span><Link href={`/reports/income-tax/${year+1}`}>{year+1}<ChevronRight size={15}/></Link></nav>
     <p className="income-print-title">Jaaroverzicht {year} — {concept?'CONCEPT':'GECONTROLEERD'}{snapshot?` — versie #${snapshot.id}`:''}</p>
     {search.saved&&<p role="status" className="balance-callout">Jaarinstellingen opgeslagen en berekening bijgewerkt.</p>}
-    {snapshot&&<div className="balance-callout warning">U bekijkt de vaste versie van {formatDate(new Date(snapshot.created_at).toISOString().slice(0,10))}. {snapshot.fingerprint!==current.fingerprint?'De actuele gegevens of controlestatus wijken inmiddels af.':'Deze versie sluit aan op de actuele gegevens.'} <Link href={`/reports/income-tax/${year}`}>Actuele jaarwerkplek openen</Link></div>}
+    {snapshot&&<div className="balance-callout warning">U bekijkt de vaste versie van {formatDay(new Date(snapshot.created_at).toISOString().slice(0,10))}. {snapshot.fingerprint!==current.fingerprint?'De actuele gegevens of controlestatus wijken inmiddels af.':'Deze versie sluit aan op de actuele gegevens.'} <Link href={`/reports/income-tax/${year}`}>Actuele jaarwerkplek openen</Link></div>}
     <div className="grid three income-metrics">{[['Opbrengsten',w.revenue],['Kosten',w.costs],['Boekhoudkundige winst',w.profit]].map(([label,amount])=><section className="card metric" key={label}><span className="metric-top">{label}</span><strong className="metric-value">{formatMoney(Number(amount))}</strong><span className="metric-note">Volgens de indeling van dit jaaroverzicht</span></section>)}</div>
-    <section className="card"><div className="card-body">
-      <h2 className="card-title">{w.issues.length?`${w.issues.length} openstaande controles`:'Jaarcijfers gecontroleerd'}</h2>
+    <section className="card"><div className="card-header"><h2 className="card-title">{w.issues.length?`${w.issues.length} openstaande controles`:'Jaarcijfers gecontroleerd'}</h2></div><div className="card-body">
       {!w.config.allocationReviewed&&<p className="balance-callout warning">Uw 100/0-verdeling is een voorlopig uitgangspunt. De afspraak is nog niet als rechtsgeldig en fiscaal beoordeeld vastgelegd.</p>}
       {w.issues.length>0&&<details className="income-checks" open><summary>Wat vraagt nog aandacht?</summary><ul>{w.issues.map((issue,i)=><li key={i}>{issue}</li>)}</ul></details>}
       <p className="field-hint">Dit overzicht bereidt het ondernemingsdeel van uw aangifte voor. Ondernemersaftrek, mkb-winstvrijstelling, investeringsaftrek, buitenvennootschappelijk vermogen en uw overige persoonlijke situatie zijn niet automatisch berekend. Er wordt geen verschuldigde inkomstenbelasting berekend.</p>
@@ -48,17 +47,17 @@ export default async function IncomeTaxYearPage({params,searchParams}:{params:Pr
       <p><strong>Afspraak winstverdeling:</strong> {w.config.allocationNote}</p>
     </div></section>
     <section className="card no-print"><div className="card-body"><details><summary>Onderliggende boekingen en factuurcontrole</summary>
-      {w.unbalanced.length>0&&<><h3>Niet-sluitende boekingen</h3><ul>{w.unbalanced.map(t=><li key={t.id}><Link href={`/transactions/${t.id}`}>#{t.id} · {formatDate(t.date)} · {t.description}</Link> · verschil {formatMoney(t.balance)}</li>)}</ul></>}
+      {w.unbalanced.length>0&&<><h3>Niet-sluitende boekingen</h3><ul>{w.unbalanced.map(t=><li key={t.id}><Link href={`/transactions/${t.id}`}>#{t.id} · {formatDay(t.date)} · {t.description}</Link> · verschil {formatMoney(t.balance)}</li>)}</ul></>}
       {w.empty.length>0&&<><h3>Boekingen zonder regels</h3><ul>{w.empty.map(t=><li key={t.id}><Link href={`/transactions/${t.id}`}>Boeking #{t.id} aanvullen</Link></li>)}</ul></>}
       {w.pending.length>0&&<p><Link href="/bank?view=pending">{w.pending.length} bankmutaties verwerken</Link></p>}
-      <h3>Grootboekmutaties {year}</h3>{used.map(a=><details key={a.id} className="income-source"><summary>{a.name} · {categories[a.category]} · {a.count} regels</summary><ul>{w.sourceLines.filter(l=>l.accountId===a.id&&l.date>=w.start&&l.date<=w.end).map(l=><li key={l.id}><Link href={`/transactions/${l.transactionId}`}>{formatDate(l.date)} · #{l.transactionId} · {l.description}</Link> · debet {formatMoney(l.debit)} / credit {formatMoney(l.credit)}</li>)}</ul></details>)}
+      <h3>Grootboekmutaties {year}</h3>{used.map(a=><details key={a.id} className="income-source"><summary>{a.name} · {categories[a.category]} · {a.count} regels</summary><ul>{w.sourceLines.filter(l=>l.accountId===a.id&&l.date>=w.start&&l.date<=w.end).map(l=><li key={l.id}><Link href={`/transactions/${l.transactionId}`}>{formatDay(l.date)} · #{l.transactionId} · {l.description}</Link> · debet {formatMoney(l.debit)} / credit {formatMoney(l.credit)}</li>)}</ul></details>)}
       <h3>Facturen ter controle</h3><p className="field-hint">Controleer of deze facturen en eventuele openstaande posten in het grootboek zijn verwerkt. Ook oudere facturen die mogelijk nog openstaan worden getoond. De factuurstatus is geen bewijs van een grootboekboeking.</p>
-      {w.invoices.length?<div className="table-wrap"><table className="data-table"><thead><tr><th>Factuur</th><th>Datum</th><th className="numeric">Exclusief btw</th><th>Betaaldatum</th></tr></thead><tbody>{w.invoices.map(i=><tr key={i.id}><td><Link href={`/invoices/${i.id}`}>#{i.number} · {i.description}</Link></td><td>{formatDate(i.date)}</td><td className="numeric">{formatMoney(i.net)}</td><td>{i.paidDate?formatDate(i.paidDate):'Niet vastgelegd'}</td></tr>)}</tbody></table></div>:<p>Geen facturen voor deze controle gevonden.</p>}
+      {w.invoices.length?<div className="table-wrap"><table className="data-table"><thead><tr><th>Factuur</th><th>Datum</th><th className="numeric">Exclusief btw</th><th>Betaaldatum</th></tr></thead><tbody>{w.invoices.map(i=><tr key={i.id}><td><Link href={`/invoices/${i.id}`}>#{i.number} · {i.description}</Link></td><td>{formatDay(i.date)}</td><td className="numeric">{formatMoney(i.net)}</td><td>{i.paidDate?formatDay(i.paidDate):'Niet vastgelegd'}</td></tr>)}</tbody></table></div>:<p>Geen facturen voor deze controle gevonden.</p>}
     </details></div></section>
     {!snapshot&&<YearConfigForm key={`${w.configId}-${w.sourceHash}`} workspace={w}/>}
     <section className="card no-print"><div className="card-header"><h2 className="card-title">Versies bewaren</h2></div><div className="card-body">
       {!snapshot&&<SnapshotForm workspace={w}/>}
-      {snapshots.length>0?<ul>{snapshots.map(s=><li key={s.id}><Link href={`/reports/income-tax/${year}?snapshot=${s.id}`}>{s.status==='draft'?'Concept':'Gecontroleerd'} #{s.id} · {formatDate(new Date(s.created_at).toISOString().slice(0,10))}</Link> · {s.fingerprint===current.fingerprint?'Sluit aan op actuele gegevens':'Actuele gegevens of controlestatus gewijzigd'}</li>)}</ul>:<p className="field-hint">Nog geen vaste versies bewaard.</p>}
+      {snapshots.length>0?<ul>{snapshots.map(s=><li key={s.id}><Link href={`/reports/income-tax/${year}?snapshot=${s.id}`}>{s.status==='draft'?'Concept':'Gecontroleerd'} #{s.id} · {formatDay(new Date(s.created_at).toISOString().slice(0,10))}</Link> · {s.fingerprint===current.fingerprint?'Sluit aan op actuele gegevens':'Actuele gegevens of controlestatus gewijzigd'}</li>)}</ul>:<p className="field-hint">Nog geen vaste versies bewaard.</p>}
     </div></section>
   </div>;
 }

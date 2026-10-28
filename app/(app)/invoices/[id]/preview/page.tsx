@@ -62,7 +62,7 @@ export default async function InvoicePreviewPage({ params }: { params: Promise<{
   return (
     <>
       <PageHeader
-        eyebrow="Afdrukvoorbeeld"
+       
         title={`Factuur #${invoice.invoice_number}`}
         subtitle="Gebruik het afdrukvenster van uw browser om de factuur als pdf op te slaan."
       >
